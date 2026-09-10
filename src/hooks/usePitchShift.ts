@@ -30,8 +30,10 @@ export const usePitchShift = (initialPitchSemitones: number = 0): UsePitchShiftR
   const pitchShiftRef = useRef<Tone.PitchShift | null>(null);
   const animFrameRef = useRef<number | null>(null);
 
-  // Initialize Tone.js audio nodes
-  useEffect(() => {
+  // Helper to ensure Tone Audio Graph is initialized on demand
+  const ensureAudioGraph = useCallback(() => {
+    if (pitchShiftRef.current) return;
+
     const pitchShift = new Tone.PitchShift({
       pitch: initialPitchSemitones,
       windowSize: 0.1,
@@ -49,13 +51,18 @@ export const usePitchShift = (initialPitchSemitones: number = 0): UsePitchShiftR
 
     playerRef.current = player;
     pitchShiftRef.current = pitchShift;
+  }, [initialPitchSemitones]);
 
+  // Cleanup Tone audio nodes on unmount
+  useEffect(() => {
     return () => {
       if (animFrameRef.current) {
         cancelAnimationFrame(animFrameRef.current);
       }
-      player.dispose();
-      pitchShift.dispose();
+      playerRef.current?.dispose();
+      pitchShiftRef.current?.dispose();
+      playerRef.current = null;
+      pitchShiftRef.current = null;
     };
   }, []);
 
@@ -81,6 +88,7 @@ export const usePitchShift = (initialPitchSemitones: number = 0): UsePitchShiftR
   // Load audio file or URL
   const loadAudio = useCallback(async (fileOrUrl: File | Blob | string) => {
     try {
+      ensureAudioGraph();
       setIsLoading(true);
       setError(null);
 
@@ -104,10 +112,11 @@ export const usePitchShift = (initialPitchSemitones: number = 0): UsePitchShiftR
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [ensureAudioGraph]);
 
   // Play audio
   const play = useCallback(async () => {
+    ensureAudioGraph();
     if (!playerRef.current || !playerRef.current.loaded) {
       setError('Nenhum áudio carregado.');
       return;
@@ -119,7 +128,7 @@ export const usePitchShift = (initialPitchSemitones: number = 0): UsePitchShiftR
       setIsPlaying(true);
       animFrameRef.current = requestAnimationFrame(updateProgress);
     }
-  }, [currentTime, updateProgress]);
+  }, [ensureAudioGraph, currentTime, updateProgress]);
 
   // Pause audio
   const pause = useCallback(() => {

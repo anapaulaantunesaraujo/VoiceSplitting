@@ -48,7 +48,7 @@ export const ReaperMixerConsole: React.FC<ReaperMixerConsoleProps> = ({
   pitchStreak,
   onBackToRepertoire
 }) => {
-  const channelList: StemChannelId[] = ['soprano', 'contralto', 'tenor', 'bass', 'accompaniment'];
+  const channelList: StemChannelId[] = ['soprano', 'mezzoSoprano', 'contralto', 'tenor', 'baritone', 'bass', 'accompaniment'];
 
   const formatTime = (secs: number) => {
     const m = Math.floor(secs / 60);

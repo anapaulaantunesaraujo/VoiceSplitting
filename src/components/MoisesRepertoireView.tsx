@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import * as Tone from 'tone';
 import { RepertoireCategory, RepertoireSong, OfflineAudioRecord } from '../hooks/useIndexedDBSync';
 
 interface MoisesRepertoireViewProps {
@@ -6,7 +7,7 @@ interface MoisesRepertoireViewProps {
   songs: RepertoireSong[];
   offlineAudios: OfflineAudioRecord[];
   onAddCategory: (name: string) => Promise<void>;
-  onSelectSongToMixer: (songTitle: string, audioBlobName?: string) => void;
+  onSelectSongToMixer: (songTitle: string, itemRecord?: any) => void;
   onUploadFile: (file: File) => void;
 }
 
@@ -123,7 +124,17 @@ export const MoisesRepertoireView: React.FC<MoisesRepertoireViewProps> = ({
           {filteredItems.map((item) => (
             <div
               key={item.id}
-              className="grid grid-cols-12 gap-4 px-6 py-4 items-center hover:bg-[#1f1f24] transition-all group"
+              onClick={async () => {
+                try {
+                  if (Tone.context.state !== 'running') {
+                    await Tone.start();
+                  }
+                } catch (e) {
+                  // ignore
+                }
+                onSelectSongToMixer(item.title, item.originalItem);
+              }}
+              className="grid grid-cols-12 gap-4 px-6 py-4 items-center hover:bg-[#1f1f24] transition-all group cursor-pointer"
             >
               {/* Title & Cover Avatar */}
               <div className="col-span-6 md:col-span-5 flex items-center gap-4">
@@ -160,8 +171,7 @@ export const MoisesRepertoireView: React.FC<MoisesRepertoireViewProps> = ({
               {/* Action Button: Abrir na Mesa de Som */}
               <div className="col-span-6 md:col-span-4 lg:col-span-1 text-right">
                 <button
-                  onClick={() => onSelectSongToMixer(item.title, item.title)}
-                  className="px-4 py-2 bg-indigo-600/20 hover:bg-indigo-600 text-indigo-300 hover:text-white border border-indigo-500/40 rounded-xl text-xs font-bold transition-all shadow-md active:scale-95 whitespace-nowrap"
+                  className="px-4 py-2 bg-indigo-600/20 group-hover:bg-indigo-600 text-indigo-300 group-hover:text-white border border-indigo-500/40 rounded-xl text-xs font-bold transition-all shadow-md active:scale-95 whitespace-nowrap pointer-events-none"
                 >
                   🎛️ Studio Mixer
                 </button>

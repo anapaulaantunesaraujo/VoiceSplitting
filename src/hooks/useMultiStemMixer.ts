@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import * as Tone from 'tone';
 
-export type StemChannelId = 'soprano' | 'contralto' | 'tenor' | 'bass' | 'accompaniment';
+export type StemChannelId = 'soprano' | 'mezzoSoprano' | 'contralto' | 'tenor' | 'baritone' | 'bass' | 'accompaniment';
 
 export interface StemChannelState {
   id: StemChannelId;
@@ -16,8 +16,10 @@ export interface MultiStemMixerOptions {
   vocalUrl: string | File;
   accompanimentUrl: string | File;
   sopranoUrl?: string | File;
+  mezzoSopranoUrl?: string | File;
   contraltoUrl?: string | File;
   tenorUrl?: string | File;
+  baritoneUrl?: string | File;
   bassUrl?: string | File;
 }
 
@@ -44,10 +46,12 @@ export interface UseMultiStemMixerReturn {
 }
 
 const DEFAULT_CHANNELS: Record<StemChannelId, StemChannelState> = {
-  soprano: { id: 'soprano', label: 'Soprano', volume: 0.9, isMuted: false, isSolo: false, color: '#ec4899' },
-  contralto: { id: 'contralto', label: 'Contralto', volume: 0.9, isMuted: false, isSolo: false, color: '#8b5cf6' },
-  tenor: { id: 'tenor', label: 'Tenor', volume: 0.9, isMuted: false, isSolo: false, color: '#3b82f6' },
-  bass: { id: 'bass', label: 'Baixo', volume: 0.9, isMuted: false, isSolo: false, color: '#10b981' },
+  soprano: { id: 'soprano', label: 'Soprano (Aguda)', volume: 0.9, isMuted: false, isSolo: false, color: '#ec4899' },
+  mezzoSoprano: { id: 'mezzoSoprano', label: 'Mezzo-soprano (Média)', volume: 0.9, isMuted: false, isSolo: false, color: '#f43f5e' },
+  contralto: { id: 'contralto', label: 'Contralto (Grave F)', volume: 0.9, isMuted: false, isSolo: false, color: '#8b5cf6' },
+  tenor: { id: 'tenor', label: 'Tenor (Agudo M)', volume: 0.9, isMuted: false, isSolo: false, color: '#3b82f6' },
+  baritone: { id: 'baritone', label: 'Barítono (Médio M)', volume: 0.9, isMuted: false, isSolo: false, color: '#06b6d4' },
+  bass: { id: 'bass', label: 'Baixo (Grave M)', volume: 0.9, isMuted: false, isSolo: false, color: '#10b981' },
   accompaniment: { id: 'accompaniment', label: 'Instrumental', volume: 0.75, isMuted: false, isSolo: false, color: '#f59e0b' }
 };
 
@@ -58,8 +62,14 @@ export const useMultiStemMixer = (): UseMultiStemMixerReturn => {
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [duration, setDuration] = useState<number>(0);
-  const [currentTime, setCurrentTime] = useState<number>(0);
+  const [currentTime, setCurrentTimeState] = useState<number>(0);
   const [error, setError] = useState<string | null>(null);
+  const currentTimeRef = useRef<number>(0);
+
+  const setCurrentTime = useCallback((val: number) => {
+    currentTimeRef.current = val;
+    setCurrentTimeState(val);
+  }, []);
 
   // Tone.js Audio Graph Nodes
   const pitchShiftRef = useRef<Tone.PitchShift | null>(null);
@@ -72,8 +82,10 @@ export const useMultiStemMixer = (): UseMultiStemMixerReturn => {
 
   const animFrameRef = useRef<number | null>(null);
 
-  // Initialize Web Audio Graph with PitchShift, MasterGain, and Channel Gains
-  useEffect(() => {
+  // Helper to ensure Tone Audio Graph is initialized on demand (after user gesture)
+  const ensureAudioGraph = useCallback(() => {
+    if (pitchShiftRef.current) return;
+
     const pitchShift = new Tone.PitchShift({
       pitch: 0,
       windowSize: 0.1,
@@ -95,9 +107,8 @@ export const useMultiStemMixer = (): UseMultiStemMixerReturn => {
     vocalCompressorRef.current = vocalCompressor;
 
     // Create channel gain nodes
-    const channelIds: StemChannelId[] = ['soprano', 'contralto', 'tenor', 'bass', 'accompaniment'];
+    const channelIds: StemChannelId[] = ['soprano', 'mezzoSoprano', 'contralto', 'tenor', 'baritone', 'bass', 'accompaniment'];
     channelIds.forEach((id) => {
-      // Route vocal stems through vocal compressor, accompaniment directly to masterGain
       const dest = id === 'accompaniment' ? masterGain : vocalCompressor;
       const gainNode = new Tone.Gain(DEFAULT_CHANNELS[id].volume).connect(dest);
       const playerNode = new Tone.Player({ loop: false, autostart: false }).connect(gainNode);
@@ -105,14 +116,20 @@ export const useMultiStemMixer = (): UseMultiStemMixerReturn => {
       channelGainsRef.current[id] = gainNode;
       playersRef.current[id] = playerNode;
     });
+  }, []);
 
+  // Cleanup Web Audio Graph on unmount
+  useEffect(() => {
     return () => {
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
       Object.values(playersRef.current).forEach((p) => p?.dispose());
       Object.values(channelGainsRef.current).forEach((g) => g?.dispose());
-      vocalCompressor.dispose();
-      masterGain.dispose();
-      pitchShift.dispose();
+      vocalCompressorRef.current?.dispose();
+      masterGainRef.current?.dispose();
+      pitchShiftRef.current?.dispose();
+      pitchShiftRef.current = null;
+      masterGainRef.current = null;
+      vocalCompressorRef.current = null;
     };
   }, []);
 
@@ -120,29 +137,78 @@ export const useMultiStemMixer = (): UseMultiStemMixerReturn => {
   const applyChannelGains = useCallback((chStates: Record<StemChannelId, StemChannelState>) => {
     const soloActive = Object.values(chStates).some((ch) => ch.isSolo);
 
-    (Object.keys(chStates) as StemChannelId[]).forEach((id) => {
-      const gainNode = channelGainsRef.current[id];
+    Object.values(chStates).forEach((ch) => {
+      const gainNode = channelGainsRef.current[ch.id];
       if (!gainNode) return;
 
-      const ch = chStates[id];
-      let targetGain = ch.volume;
-
+      let targetGain = 0;
       if (ch.isMuted) {
         targetGain = 0;
       } else if (soloActive) {
-        if (ch.isSolo) {
-          // Boost soloed stem slightly (+20%) for clarity
-          targetGain = Math.min(ch.volume * 1.2, 1.5);
-        } else {
-          // Attenuate non-soloed stems to 15% reference background level (prevents total silence, allows manual fader tuning)
-          targetGain = ch.volume * 0.15;
-        }
+        // Completely isolate the soloed stem; silence all non-soloed stems to 0
+        targetGain = ch.isSolo ? ch.volume : 0;
+      } else {
+        targetGain = ch.volume;
       }
 
-      // Ramp smoothly over 0.05 seconds to avoid dry pops/clicks in headphones
+      // Smooth linear ramp gain to eliminate audio pops
       gainNode.gain.rampTo(targetGain, 0.05);
     });
   }, []);
+
+  // Set Master Volume (0.0 to 1.0)
+  const setMasterVolume = useCallback((val: number) => {
+    const boundedVal = Math.max(0, Math.min(1, val));
+    setMasterVolumeState(boundedVal);
+    if (masterGainRef.current) {
+      masterGainRef.current.gain.rampTo(boundedVal, 0.05);
+    }
+  }, []);
+
+  // Set Channel Volume
+  const setChannelVolume = useCallback(
+    (id: StemChannelId, volume: number) => {
+      setChannels((prev) => {
+        const next = {
+          ...prev,
+          [id]: { ...prev[id], volume: Math.max(0, Math.min(1, volume)) }
+        };
+        applyChannelGains(next);
+        return next;
+      });
+    },
+    [applyChannelGains]
+  );
+
+  // Toggle Mute (M)
+  const toggleMute = useCallback(
+    (id: StemChannelId) => {
+      setChannels((prev) => {
+        const next = {
+          ...prev,
+          [id]: { ...prev[id], isMuted: !prev[id].isMuted }
+        };
+        applyChannelGains(next);
+        return next;
+      });
+    },
+    [applyChannelGains]
+  );
+
+  // Toggle Solo (S)
+  const toggleSolo = useCallback(
+    (id: StemChannelId) => {
+      setChannels((prev) => {
+        const next = {
+          ...prev,
+          [id]: { ...prev[id], isSolo: !prev[id].isSolo }
+        };
+        applyChannelGains(next);
+        return next;
+      });
+    },
+    [applyChannelGains]
+  );
 
   // Set Pitch Shift Semitones (-6 to +6)
   const setPitchSemitones = useCallback((semitones: number) => {
@@ -152,57 +218,24 @@ export const useMultiStemMixer = (): UseMultiStemMixerReturn => {
     }
   }, []);
 
-  // Master Gain adjustment
-  const setMasterVolume = useCallback((val: number) => {
-    setMasterVolumeState(val);
-    if (masterGainRef.current) {
-      masterGainRef.current.gain.rampTo(val, 0.05);
-    }
-  }, []);
-
-  // Set individual channel volume fader (0.0 to 1.0)
-  const setChannelVolume = useCallback((id: StemChannelId, volume: number) => {
-    setChannels((prev) => {
-      const updated = {
-        ...prev,
-        [id]: { ...prev[id], volume }
-      };
-      applyChannelGains(updated);
-      return updated;
-    });
-  }, [applyChannelGains]);
-
-  // Toggle Mute (M)
-  const toggleMute = useCallback((id: StemChannelId) => {
-    setChannels((prev) => {
-      const updated = {
-        ...prev,
-        [id]: { ...prev[id], isMuted: !prev[id].isMuted }
-      };
-      applyChannelGains(updated);
-      return updated;
-    });
-  }, [applyChannelGains]);
-
-  // Toggle Solo (S)
-  const toggleSolo = useCallback((id: StemChannelId) => {
-    setChannels((prev) => {
-      const updated = {
-        ...prev,
-        [id]: { ...prev[id], isSolo: !prev[id].isSolo }
-      };
-      applyChannelGains(updated);
-      return updated;
-    });
-  }, [applyChannelGains]);
-
-  // Progress Tracker Loop
+  // Update position progress
   const updateProgress = useCallback(() => {
-    const mainPlayer = playersRef.current.soprano || playersRef.current.accompaniment;
-    if (mainPlayer && mainPlayer.state === 'started') {
-      const time = mainPlayer.toSeconds(mainPlayer.immediate()) - (mainPlayer as any)._startTime;
-      const dur = mainPlayer.buffer.duration;
-      const progress = Math.min(Math.max(time, 0), dur);
+    const activePlayer = Object.values(playersRef.current).find(
+      (p) => p && p.state === 'started' && p.buffer && p.buffer.loaded
+    );
+
+    if (activePlayer && activePlayer.buffer) {
+      const dur = activePlayer.buffer.duration || 1;
+      let rawTime = 0;
+      try {
+        const startTime = (activePlayer as any)._startTime || 0;
+        rawTime = activePlayer.toSeconds(activePlayer.immediate()) - startTime;
+      } catch (e) {
+        rawTime = 0;
+      }
+
+      const validTime = Number.isFinite(rawTime) && rawTime >= 0 ? rawTime : 0;
+      const progress = Math.min(Math.max(validTime, 0), dur);
 
       setCurrentTime(progress);
 
@@ -219,6 +252,7 @@ export const useMultiStemMixer = (): UseMultiStemMixerReturn => {
   // Load Stems into Players
   const loadStems = useCallback(async (options: MultiStemMixerOptions) => {
     try {
+      ensureAudioGraph();
       setIsLoading(true);
       setError(null);
 
@@ -228,8 +262,8 @@ export const useMultiStemMixer = (): UseMultiStemMixerReturn => {
 
       const loadPromises: Promise<any>[] = [];
 
-      // Load Vocal stem into all voice channel players (Soprano, Contralto, Tenor, Bass)
-      const vocalChannels: StemChannelId[] = ['soprano', 'contralto', 'tenor', 'bass'];
+      // Load Vocal stem into all voice channel players (Soprano, Mezzo-soprano, Contralto, Tenor, Barítono, Baixo)
+      const vocalChannels: StemChannelId[] = ['soprano', 'mezzoSoprano', 'contralto', 'tenor', 'baritone', 'bass'];
       vocalChannels.forEach((id) => {
         const player = playersRef.current[id];
         if (player) loadPromises.push(player.load(vUrl));
@@ -250,22 +284,31 @@ export const useMultiStemMixer = (): UseMultiStemMixerReturn => {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [ensureAudioGraph]);
 
   const play = useCallback(async () => {
+    ensureAudioGraph();
     await Tone.start();
     const now = Tone.now();
-    const offset = currentTime;
+    const rawOffset = Number(currentTimeRef.current);
+    const offset = Number.isFinite(rawOffset) && rawOffset >= 0 ? rawOffset : 0;
 
     Object.values(playersRef.current).forEach((player) => {
       if (player && player.loaded) {
-        player.start(now, offset);
+        try {
+          // Record start time on Tone.Player for precise progress tracking
+          (player as any)._startTime = now - offset;
+          player.start(now, offset);
+        } catch (err) {
+          console.warn('Tone.Player start error:', err);
+        }
       }
     });
 
     setIsPlaying(true);
+    if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
     animFrameRef.current = requestAnimationFrame(updateProgress);
-  }, [currentTime, updateProgress]);
+  }, [ensureAudioGraph, updateProgress]);
 
   const pause = useCallback(() => {
     Object.values(playersRef.current).forEach((player) => player?.stop());
@@ -277,17 +320,22 @@ export const useMultiStemMixer = (): UseMultiStemMixerReturn => {
     Object.values(playersRef.current).forEach((player) => player?.stop());
     setIsPlaying(false);
     setCurrentTime(0);
+    currentTimeRef.current = 0;
     if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
   }, []);
 
-  const seek = useCallback((seconds: number) => {
-    const wasPlaying = isPlaying;
-    stop();
-    setCurrentTime(seconds);
-    if (wasPlaying) {
-      setTimeout(() => play(), 50);
-    }
-  }, [isPlaying, play, stop]);
+  const seek = useCallback(
+    (seconds: number) => {
+      const wasPlaying = isPlaying;
+      stop();
+      setCurrentTime(seconds);
+      currentTimeRef.current = seconds;
+      if (wasPlaying) {
+        setTimeout(() => play(), 50);
+      }
+    },
+    [isPlaying, play, stop]
+  );
 
   // Compute currently soloed stem channel (if any) to inform tuner pitch reference
   const soloActiveStem = (Object.keys(channels) as StemChannelId[]).find((id) => channels[id].isSolo) || null;

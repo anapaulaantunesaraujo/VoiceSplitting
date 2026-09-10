@@ -43,7 +43,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             {isOpen && (
               <div className="flex flex-col">
                 <span className="font-black text-white text-base tracking-tight leading-none">
-                  Moises<span className="text-indigo-400 font-light">Vocal</span>
+                  Voice<span className="text-indigo-400 font-light">Splitting</span>
                 </span>
                 <span className="text-[10px] text-slate-500 font-semibold tracking-wider uppercase mt-1">
                   AI Vocal Studio
@@ -68,7 +68,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <div>
             {isOpen && (
               <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest px-3 mb-2 block">
-                Produtos
+                Navegação
               </span>
             )}
             <nav className="space-y-1">
@@ -82,25 +82,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
               >
                 <span className="text-base">🎵</span>
                 {isOpen && <span>Meu Repertório</span>}
-              </button>
-
-              <button
-                onClick={() => onSelectTab('mixer')}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${
-                  activeTab === 'mixer'
-                    ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
-                    : 'hover:bg-slate-800/60 text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                <span className="text-base">🎛️</span>
-                {isOpen && (
-                  <div className="flex items-center justify-between w-full">
-                    <span>Studio Mixer</span>
-                    <span className="text-[9px] bg-indigo-950 text-indigo-400 border border-indigo-800/50 px-1.5 py-0.5 rounded font-mono font-bold">
-                      DAW
-                    </span>
-                  </div>
-                )}
               </button>
             </nav>
           </div>
