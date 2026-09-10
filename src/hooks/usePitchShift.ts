@@ -93,7 +93,6 @@ export const usePitchShift = (initialPitchSemitones: number = 0): UsePitchShiftR
         setFileName(fileOrUrl instanceof File ? fileOrUrl.name : 'Arquivo de Áudio');
       }
 
-      await Tone.start();
       if (!playerRef.current) return;
 
       await playerRef.current.load(url);

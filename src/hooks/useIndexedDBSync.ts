@@ -14,6 +14,27 @@ const offlineAudioStore = localforage.createInstance({
   storeName: 'offlineAudioBlobs'
 });
 
+const repertoireStore = localforage.createInstance({
+  name: 'VoiceSplittingDB',
+  storeName: 'repertoireFolders'
+});
+
+export interface RepertoireSong {
+  id: string;
+  title: string;
+  fileName: string;
+  category: string;
+  createdAt: string;
+  vocalBlobId?: string;
+  accompanimentBlobId?: string;
+}
+
+export interface RepertoireCategory {
+  id: string;
+  name: string;
+  icon?: string;
+}
+
 export interface OfflineAudioRecord {
   id: string;
   name: string;
@@ -28,6 +49,10 @@ export interface UseIndexedDBSyncReturn {
   savePracticeSession: (secondsSpent: number, isAccurate: boolean) => Promise<void>;
   saveAudioOffline: (name: string, blob: Blob, type: 'vocal' | 'accompaniment' | 'original') => Promise<void>;
   offlineAudios: OfflineAudioRecord[];
+  categories: RepertoireCategory[];
+  songs: RepertoireSong[];
+  addCategory: (name: string) => Promise<void>;
+  addSongToCategory: (title: string, fileName: string, category: string) => Promise<void>;
   isSyncing: boolean;
   syncStatusLog: string | null;
   triggerBackgroundSync: (profile: UserProfile) => Promise<void>;
@@ -48,6 +73,13 @@ export const useIndexedDBSync = (userProfile: UserProfile | null): UseIndexedDBS
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [syncStatusLog, setSyncStatusLog] = useState<string | null>(null);
 
+  const [categories, setCategories] = useState<RepertoireCategory[]>([
+    { id: 'exercicios', name: 'Exercícios', icon: '🎧' },
+    { id: 'apresentacoes', name: 'Apresentações', icon: '🎤' },
+    { id: 'estudos', name: 'Estudos Vocais', icon: '📚' }
+  ]);
+  const [songs, setSongs] = useState<RepertoireSong[]>([]);
+
   // 1. Initialize & load local IndexedDB data as Single Source of Truth
   const loadIndexedDBData = useCallback(async () => {
     try {
@@ -63,9 +95,54 @@ export const useIndexedDBSync = (userProfile: UserProfile | null): UseIndexedDBS
         audios.push(value);
       });
       setOfflineAudios(audios);
+
+      const savedCategories = await repertoireStore.getItem<RepertoireCategory[]>('categories');
+      if (savedCategories) {
+        setCategories(savedCategories);
+      } else {
+        const defaultCats: RepertoireCategory[] = [
+          { id: 'exercicios', name: 'Exercícios', icon: '🎧' },
+          { id: 'apresentacoes', name: 'Apresentações', icon: '🎤' },
+          { id: 'estudos', name: 'Estudos Vocais', icon: '📚' }
+        ];
+        await repertoireStore.setItem('categories', defaultCats);
+      }
+
+      const savedSongs = await repertoireStore.getItem<RepertoireSong[]>('songs');
+      if (savedSongs) {
+        setSongs(savedSongs);
+      }
     } catch (err) {
       console.error('Erro ao carregar dados do IndexedDB:', err);
     }
+  }, []);
+
+  const addCategory = useCallback(async (name: string) => {
+    const newCat: RepertoireCategory = {
+      id: name.toLowerCase().replace(/\s+/g, '-'),
+      name,
+      icon: '📁'
+    };
+    setCategories((prev) => {
+      const updated = [...prev, newCat];
+      repertoireStore.setItem('categories', updated);
+      return updated;
+    });
+  }, []);
+
+  const addSongToCategory = useCallback(async (title: string, fileName: string, category: string) => {
+    const newSong: RepertoireSong = {
+      id: `song_${Date.now()}`,
+      title,
+      fileName,
+      category,
+      createdAt: new Date().toISOString()
+    };
+    setSongs((prev) => {
+      const updated = [...prev, newSong];
+      repertoireStore.setItem('songs', updated);
+      return updated;
+    });
   }, []);
 
   useEffect(() => {
@@ -190,6 +267,10 @@ export const useIndexedDBSync = (userProfile: UserProfile | null): UseIndexedDBS
     savePracticeSession,
     saveAudioOffline,
     offlineAudios,
+    categories,
+    songs,
+    addCategory,
+    addSongToCategory,
     isSyncing,
     syncStatusLog,
     triggerBackgroundSync
