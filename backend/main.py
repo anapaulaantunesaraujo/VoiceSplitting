@@ -14,9 +14,10 @@ app = FastAPI(
 )
 
 # CORS setup
+CORS_ORIGINS = [orig.strip() for orig in os.getenv("CORS_ORIGINS", "*").split(",") if orig.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=CORS_ORIGINS if "*" not in CORS_ORIGINS else ["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -38,6 +39,10 @@ def cleanup_files(*paths: Path):
 @app.get("/")
 def read_root():
     return {"status": "online", "message": "VoiceSplitting API está pronta para receber uploads de áudio."}
+
+@app.get("/health")
+def health():
+    return {"status": "healthy"}
 
 @app.post("/api/separate-audio")
 async def separate_audio(

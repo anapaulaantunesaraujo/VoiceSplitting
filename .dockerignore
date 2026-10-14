@@ -1,0 +1,13 @@
+node_modules
+dist
+.git
+.github
+.agents
+.firebase
+.gemini
+*.log
+.DS_Store
+tmp
+backend/tmp
+backend/__pycache__
+*.pyc

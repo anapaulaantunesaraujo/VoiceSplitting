@@ -1,0 +1,91 @@
+services:
+  # =====================================================================
+  # 1. FRONTEND SERVICE (React 19 + Vite PWA + Internal Nginx Reverse Proxy)
+  # =====================================================================
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VITE_GOOGLE_CLIENT_ID: ${VITE_GOOGLE_CLIENT_ID:-}
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-}
+        VITE_ONNX_MODEL_URL: ${VITE_ONNX_MODEL_URL:-}
+    container_name: voicesplit_frontend
+    restart: unless-stopped
+    ports:
+      # Porta exclusiva do host mapeada para o Nginx Proxy Manager (Padrão: 3050)
+      - "${PORT_FRONTEND:-3050}:80"
+    environment:
+      - NODE_ENV=production
+    depends_on:
+      backend:
+        condition: service_started
+    networks:
+      - voicesplit_network
+
+  # =====================================================================
+  # 2. BACKEND SERVICE (Python FastAPI + Uvicorn + Demucs Audio Separation)
+  # =====================================================================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: voicesplit_backend
+    restart: unless-stopped
+    ports:
+      # Porta do host para o backend (Padrão: 8050, isolada de outros apps)
+      - "${PORT_BACKEND:-8050}:8000"
+    environment:
+      - DATABASE_URL=postgresql://${DB_USER:-voicesplit_user}:${DB_PASSWORD:-voicesplit_pass_secret}@db:5432/${DB_NAME:-voicesplit_db}
+      - CORS_ORIGINS=${CORS_ORIGINS:-*}
+    volumes:
+      - voicesplit_uploads:/app/tmp/uploads
+      - voicesplit_separated:/app/tmp/separated
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - voicesplit_network
+
+  # =====================================================================
+  # 3. DATABASE SERVICE (PostgreSQL 16 - Totalmente Isolado)
+  # =====================================================================
+  db:
+    image: postgres:16-alpine
+    container_name: voicesplit_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-voicesplit_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-voicesplit_pass_secret}
+      POSTGRES_DB: ${DB_NAME:-voicesplit_db}
+    ports:
+      # Mapeada apenas para 127.0.0.1 (localhost) na porta 5435 para evitar conflitos de porta no host
+      - "127.0.0.1:${PORT_DB:-5435}:5432"
+    volumes:
+      - voicesplit_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-voicesplit_user} -d ${DB_NAME:-voicesplit_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - voicesplit_network
+
+# =====================================================================
+# REDE DOCKER ISOLADA (Garante que este app não interfira em nenhum outro)
+# =====================================================================
+networks:
+  voicesplit_network:
+    name: voicesplit_network
+    driver: bridge
+
+# =====================================================================
+# VOLUMES PERSISTENTES DEDICADOS
+# =====================================================================
+volumes:
+  voicesplit_pgdata:
+    name: voicesplit_pgdata
+  voicesplit_uploads:
+    name: voicesplit_uploads
+  voicesplit_separated:
+    name: voicesplit_separated

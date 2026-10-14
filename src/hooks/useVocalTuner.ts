@@ -17,8 +17,13 @@ export interface UseVocalTunerReturn {
   userPitch: PitchInfo | null;
   targetPitch: PitchInfo | null;
   setTargetFrequency: (freq: number) => void;
-  extractTargetPitchFromBuffer: (buffer: AudioBuffer, timeInSeconds: number) => void;
+  extractTargetPitchFromBuffer: (buffer: AudioBuffer, timeInSeconds: number, semitoneShift?: number) => void;
   error: string | null;
+}
+
+export function shiftFrequencyBySemitones(freq: number, semitones: number): number {
+  if (freq <= 0) return freq;
+  return freq * Math.pow(2, semitones / 12);
 }
 
 export function frequencyToNote(freq: number): { note: string; octave: number; cents: number } {
@@ -26,7 +31,8 @@ export function frequencyToNote(freq: number): { note: string; octave: number; c
   const roundNote = Math.round(noteNum);
   const cents = Math.floor((noteNum - roundNote) * 100);
   
-  const noteName = NOTE_STRINGS[roundNote % 12];
+  const noteIndex = ((roundNote % 12) + 12) % 12;
+  const noteName = NOTE_STRINGS[noteIndex];
   const octave = Math.floor(roundNote / 12) - 1;
 
   return { note: noteName, octave, cents };
@@ -140,8 +146,9 @@ export const useVocalTuner = (): UseVocalTunerReturn => {
     });
   }, []);
 
-  // Extract target pitch from isolated ONNX vocal stem AudioBuffer at time location
-  const extractTargetPitchFromBuffer = useCallback((buffer: AudioBuffer, timeInSeconds: number) => {
+  // Extract target pitch from isolated ONNX vocal stem AudioBuffer at time location,
+  // shifted by harmonic interval (e.g. +4 ST for Contralto 3ª, +7 ST for Tenor 5ª)
+  const extractTargetPitchFromBuffer = useCallback((buffer: AudioBuffer, timeInSeconds: number, semitoneShift: number = 0) => {
     const sampleRate = buffer.sampleRate;
     const channelData = buffer.getChannelData(0);
 
@@ -152,10 +159,15 @@ export const useVocalTuner = (): UseVocalTunerReturn => {
       const slice = channelData.slice(startIndex, startIndex + windowSize);
       const { frequency } = yinPitchDetector(slice, sampleRate);
       if (frequency > 80 && frequency < 1100) {
-        setTargetFrequency(frequency);
+        const shifted = semitoneShift !== 0 ? shiftFrequencyBySemitones(frequency, semitoneShift) : frequency;
+        setTargetFrequency(shifted);
       }
     }
   }, [setTargetFrequency]);
+
+  const lastUpdateRef = useRef<number>(0);
+  const dropoutTimerRef = useRef<number | null>(null);
+  const smoothedFreqRef = useRef<number | null>(null);
 
   const processAudio = useCallback(() => {
     if (analyserRef.current && audioCtxRef.current) {
@@ -163,18 +175,48 @@ export const useVocalTuner = (): UseVocalTunerReturn => {
       analyserRef.current.getFloatTimeDomainData(buffer);
 
       const { frequency, clarity } = yinPitchDetector(buffer, audioCtxRef.current.sampleRate);
+      const now = performance.now();
 
       if (frequency > 0 && clarity > 0.5) {
-        const info = frequencyToNote(frequency);
-        setUserPitch({
-          frequency,
-          note: info.note,
-          octave: info.octave,
-          cents: info.cents,
-          clarity
-        });
+        if (dropoutTimerRef.current) {
+          clearTimeout(dropoutTimerRef.current);
+          dropoutTimerRef.current = null;
+        }
+
+        // Apply EMA (Exponential Moving Average) smoothing to filter out raw mic jitter
+        let filteredFreq = frequency;
+        if (smoothedFreqRef.current !== null) {
+          // If frequency jump is within normal vocal range (< 200Hz difference), smooth it
+          const diff = Math.abs(frequency - smoothedFreqRef.current);
+          if (diff < 200) {
+            filteredFreq = smoothedFreqRef.current * 0.65 + frequency * 0.35;
+          } else {
+            filteredFreq = frequency; // Allow legitimate note jumps
+          }
+        }
+        smoothedFreqRef.current = filteredFreq;
+
+        // Throttle React state updates to 80ms (~12-15 FPS) for rock-solid UI stability
+        if (now - lastUpdateRef.current >= 80) {
+          lastUpdateRef.current = now;
+          const info = frequencyToNote(filteredFreq);
+          setUserPitch({
+            frequency: filteredFreq,
+            note: info.note,
+            octave: info.octave,
+            cents: info.cents,
+            clarity
+          });
+        }
       } else {
-        setUserPitch(null);
+        // 150ms hold time to prevent rapid flickering between pitch and null
+        if (!dropoutTimerRef.current) {
+          dropoutTimerRef.current = window.setTimeout(() => {
+            setUserPitch(null);
+            smoothedFreqRef.current = null;
+            dropoutTimerRef.current = null;
+          }, 150);
+        }
       }
 
       animFrameRef.current = requestAnimationFrame(processAudio);

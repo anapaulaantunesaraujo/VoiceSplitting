@@ -17,7 +17,6 @@ interface StudioMixerConsoleProps {
   currentTime: number;
   duration: number;
   onSeek: (time: number) => void;
-  // Tuner Props
   isListening: boolean;
   onToggleTuner: () => void;
   userPitch: PitchInfo | null;
@@ -56,7 +55,6 @@ export const StudioMixerConsole: React.FC<StudioMixerConsoleProps> = ({
     return `${m}:${s < 10 ? '0' : ''}${s}`;
   };
 
-  // Positive Pitch Validation Check
   let inTune = false;
   if (userPitch && targetPitch && targetPitch.frequency > 0) {
     const centsDiff = 1200 * (Math.log(userPitch.frequency / targetPitch.frequency) / Math.log(2));
@@ -66,31 +64,31 @@ export const StudioMixerConsole: React.FC<StudioMixerConsoleProps> = ({
   }
 
   return (
-    <div className="studio-mixer-wrapper bg-[#121212] text-slate-200 rounded-3xl p-6 border border-slate-800 shadow-2xl pb-32">
-      {/* Top Console Navigation Bar */}
-      <div className="flex items-center justify-between pb-6 mb-6 border-b border-slate-800">
+    <div className="studio-mixer-wrapper bg-[#121212] text-white rounded-3xl p-6 border border-[#2e2e2e] shadow-2xl pb-36 space-y-6">
+      {/* Top Console Bar */}
+      <div className="flex items-center justify-between pb-4 border-b border-[#2e2e2e]">
         <div className="flex items-center gap-3">
           <button
             onClick={onBackToRepertoire}
-            className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold transition-all border border-slate-700 flex items-center gap-2"
+            className="px-3.5 py-2 bg-[#1e1e1e] hover:bg-[#262626] text-white rounded-xl text-xs font-bold transition-all border border-[#2e2e2e] flex items-center gap-2 cursor-pointer"
           >
             ⬅️ Voltar ao Repertório
           </button>
           <div>
-            <h2 className="text-xl font-black text-white tracking-tight flex items-center gap-2">
-              🎛️ Mesa de Som (Mixer DAW REAPER)
+            <h2 className="text-xl font-extrabold text-white tracking-tight flex items-center gap-2">
+              🎛️ Mesa de Som (Treino Vocal)
             </h2>
-            <p className="text-xs text-slate-400 font-medium">
+            <p className="text-xs text-[#a3a3a3] font-medium">
               Controle de canais isolados, botões Focar / Silenciar e Afinador Integrado
             </p>
           </div>
         </div>
       </div>
 
-      {/* Console Main Body Grid (ChannelStrips + Master & Digital Tuner Panel) */}
+      {/* Main Console Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* Left Section: 5 Vertical Channel Strips (Span 3 cols) */}
-        <div className="lg:col-span-3 bg-[#1a1a1a] p-5 rounded-2xl border border-slate-800 shadow-inner grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+        {/* Vertical Channel Strips */}
+        <div className="lg:col-span-3 bg-[#0a0a0a] p-4 rounded-2xl border border-[#2e2e2e] grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
           {channelList.map((id) => {
             const ch = channels[id];
             const isMuted = ch.isMuted;
@@ -101,50 +99,44 @@ export const StudioMixerConsole: React.FC<StudioMixerConsoleProps> = ({
                 key={id}
                 className={`channel-strip-card flex flex-col items-center p-3 rounded-xl border transition-all ${
                   isSolo
-                    ? 'bg-[#262010] border-amber-500/60 shadow-lg shadow-amber-500/10'
+                    ? 'bg-[#1e1e1e] border-[#2563eb] ring-2 ring-[#2563eb]/40 shadow-lg shadow-blue-900/20'
                     : isMuted
-                    ? 'bg-[#181818] border-slate-800 opacity-50'
-                    : 'bg-[#222222] border-slate-700/60 hover:border-slate-600'
+                    ? 'bg-[#121212] border-[#2e2e2e] opacity-40'
+                    : 'bg-[#121212] border-[#2e2e2e] hover:border-[#404040]'
                 }`}
               >
-                {/* 1. Voice Title Header */}
-                <div className="w-full text-center pb-2 mb-2 border-b border-slate-800">
-                  <span className="text-xs font-black text-slate-200 block truncate" style={{ color: ch.color }}>
+                <div className="w-full text-center pb-2 mb-2 border-b border-[#2e2e2e]">
+                  <span className="text-xs font-extrabold text-white uppercase block truncate" style={{ color: ch.color }}>
                     {ch.label}
                   </span>
                 </div>
 
-                {/* 2. Didactic Action Buttons: "Focar" (Solo) & "Silenciar" (Mute) */}
                 <div className="flex flex-col gap-2 w-full mb-4">
                   <button
                     onClick={() => onToggleSolo(id)}
-                    className={`w-full py-1.5 rounded-lg text-[11px] font-black tracking-wider uppercase transition-all shadow-sm ${
+                    className={`w-full py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all cursor-pointer ${
                       isSolo
-                        ? 'bg-amber-500 text-black font-extrabold shadow-amber-500/30 animate-pulse'
-                        : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-slate-200 border border-slate-700'
+                        ? 'bg-[#2563eb] text-white shadow-md shadow-blue-600/30'
+                        : 'bg-[#1e1e1e] text-[#a3a3a3] hover:bg-[#262626] hover:text-white border border-[#2e2e2e]'
                     }`}
-                    title="Focar nesta voz (Solo)"
                   >
                     🎯 Focar
                   </button>
 
                   <button
                     onClick={() => onToggleMute(id)}
-                    className={`w-full py-1.5 rounded-lg text-[11px] font-black tracking-wider uppercase transition-all shadow-sm ${
+                    className={`w-full py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all cursor-pointer ${
                       isMuted
-                        ? 'bg-rose-600 text-white font-extrabold shadow-rose-600/30'
-                        : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-slate-200 border border-slate-700'
+                        ? 'bg-rose-600 text-white shadow-md shadow-rose-600/30'
+                        : 'bg-[#1e1e1e] text-[#a3a3a3] hover:bg-[#262626] hover:text-white border border-[#2e2e2e]'
                     }`}
-                    title="Silenciar esta voz (Mute)"
                   >
                     🔇 Silenciar
                   </button>
                 </div>
 
-                {/* 3. Studio Vertical Fader & VU Meter Bar */}
-                <div className="flex items-center justify-center gap-3 h-48 py-2 relative w-full">
-                  {/* Rotated HTML5 Fader Range Input */}
-                  <div className="fader-rotated-wrapper flex items-center justify-center h-44 w-12">
+                <div className="flex items-center justify-center gap-3 h-44 py-2 relative w-full">
+                  <div className="fader-rotated-wrapper flex items-center justify-center h-40 w-10">
                     <input
                       type="range"
                       min="0"
@@ -157,8 +149,7 @@ export const StudioMixerConsole: React.FC<StudioMixerConsoleProps> = ({
                     />
                   </div>
 
-                  {/* VU Meter LED Level Bar */}
-                  <div className="vu-meter-bar w-2.5 h-40 bg-slate-900 border border-slate-800 rounded-full flex flex-col justify-end overflow-hidden p-0.5">
+                  <div className="vu-meter-bar w-2.5 h-36 bg-[#000000] border border-[#2e2e2e] rounded-full flex flex-col justify-end overflow-hidden p-0.5">
                     <div
                       className="vu-meter-fill w-full rounded-full transition-all duration-75"
                       style={{
@@ -166,16 +157,15 @@ export const StudioMixerConsole: React.FC<StudioMixerConsoleProps> = ({
                         background: isMuted
                           ? 'transparent'
                           : isSolo
-                          ? 'linear-gradient(to top, #22c55e 60%, #eab308 85%, #ef4444 100%)'
-                          : 'linear-gradient(to top, #3b82f6 70%, #60a5fa 100%)'
+                          ? 'linear-gradient(to top, #10b981 60%, #3b82f6 85%, #ec4899 100%)'
+                          : 'linear-gradient(to top, #2563eb 70%, #3b82f6 100%)'
                       }}
                     />
                   </div>
                 </div>
 
-                {/* 4. Volume Percentage Indicator */}
                 <div className="mt-3 text-center w-full">
-                  <span className="text-[10px] font-mono font-bold text-slate-400 bg-slate-900 px-2 py-1 rounded border border-slate-800 block">
+                  <span className="text-[10px] font-mono font-bold text-white bg-[#000000] px-2 py-1 rounded border border-[#2e2e2e] block">
                     {isMuted ? 'MUTED' : `${Math.round(ch.volume * 100)}%`}
                   </span>
                 </div>
@@ -184,57 +174,52 @@ export const StudioMixerConsole: React.FC<StudioMixerConsoleProps> = ({
           })}
         </div>
 
-        {/* Right Section: Digital Tuner Panel & Master Section */}
-        <div className="lg:col-span-1 bg-[#1a1a1a] p-5 rounded-2xl border border-slate-800 flex flex-col justify-between">
-          {/* Black Digital Vocal Tuner Panel */}
-          <div className="bg-black border border-slate-800 rounded-2xl p-4 mb-4 shadow-inner text-center">
-            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center justify-center gap-1.5">
+        {/* Master & Tuner Section */}
+        <div className="lg:col-span-1 bg-[#0a0a0a] p-4 rounded-2xl border border-[#2e2e2e] flex flex-col justify-between">
+          <div className="bg-[#121212] border border-[#2e2e2e] rounded-2xl p-4 shadow-inner text-center">
+            <h3 className="text-xs font-bold text-[#a3a3a3] uppercase tracking-widest mb-3 flex items-center justify-center gap-1.5">
               <span>🎤</span> Afinador de Voz
             </h3>
 
-            {/* Target & User Note Display */}
-            <div className="flex items-center justify-around my-3 py-2 bg-slate-950 rounded-xl border border-slate-900">
+            <div className="flex items-center justify-around my-3 py-2 bg-[#000000] rounded-xl border border-[#2e2e2e]">
               <div>
-                <span className="text-[9px] uppercase font-bold text-slate-500 block">Referência</span>
-                <span className="text-base font-black text-amber-400">
+                <span className="text-[9px] uppercase font-bold text-[#737373] block">Referência</span>
+                <span className="text-base font-black text-[#2563eb]">
                   {targetPitch ? targetPitch.note : 'Focar Voz'}
                 </span>
               </div>
-              <div className="h-6 w-px bg-slate-800" />
+              <div className="h-6 w-px bg-[#2e2e2e]" />
               <div>
-                <span className="text-[9px] uppercase font-bold text-slate-500 block">Sua Voz</span>
-                <span className={`text-base font-black ${inTune ? 'text-emerald-400 animate-pulse' : 'text-slate-200'}`}>
+                <span className="text-[9px] uppercase font-bold text-[#737373] block">Sua Voz</span>
+                <span className={`text-base font-black ${inTune ? 'text-emerald-400 animate-pulse' : 'text-white'}`}>
                   {userPitch ? userPitch.note : '--'}
                 </span>
               </div>
             </div>
 
-            {/* Positive Validation Feedback */}
             {inTune && (
               <div className="my-2 py-1 px-2 bg-emerald-950/80 border border-emerald-500/40 text-emerald-400 text-[11px] font-bold rounded-lg animate-pulse">
                 ✨ Afinação Perfeita! (+{pitchStreak})
               </div>
             )}
 
-            {/* Activate Microphone Button */}
             <button
               onClick={onToggleTuner}
-              className={`w-full py-2.5 mt-2 rounded-xl text-xs font-bold transition-all shadow-md flex items-center justify-center gap-2 ${
+              className={`w-full py-2.5 mt-2 rounded-xl text-xs font-bold transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer ${
                 isListening
-                  ? 'bg-emerald-600 hover:bg-emerald-500 text-white animate-pulse shadow-emerald-900/50'
-                  : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-900/40'
+                  ? 'bg-emerald-600 hover:bg-emerald-500 text-white animate-pulse'
+                  : 'bg-[#2563eb] hover:bg-[#1d4ed8] text-white shadow-blue-900/40'
               }`}
             >
               {isListening ? '🛑 Desligar Microfone' : '🎙️ Ativar Microfone'}
             </button>
           </div>
 
-          {/* Volume Geral (Master) Fader */}
-          <div className="bg-[#222222] border border-slate-800 p-4 rounded-2xl flex flex-col items-center">
-            <span className="text-xs font-black text-slate-300 uppercase tracking-wider mb-2">
+          <div className="bg-[#121212] border border-[#2e2e2e] p-4 rounded-2xl flex flex-col items-center">
+            <span className="text-xs font-extrabold text-white uppercase tracking-wider mb-2">
               🔊 Volume Geral
             </span>
-            <div className="h-32 flex items-center justify-center my-2">
+            <div className="h-28 flex items-center justify-center my-2">
               <input
                 type="range"
                 min="0"
@@ -243,39 +228,37 @@ export const StudioMixerConsole: React.FC<StudioMixerConsoleProps> = ({
                 value={masterVolume}
                 onChange={(e) => onMasterVolumeChange(parseFloat(e.target.value))}
                 className="daw-fader-input"
-                style={{ accentColor: '#6366f1' }}
+                style={{ accentColor: '#2563eb' }}
               />
             </div>
-            <span className="text-xs font-mono font-bold text-indigo-400 mt-1">
+            <span className="text-xs font-mono font-bold text-[#3b82f6] mt-1">
               {Math.round(masterVolume * 100)}%
             </span>
           </div>
         </div>
       </div>
 
-      {/* Bottom Horizontal Transport Dock (Fixed) */}
-      <div className="fixed bottom-0 left-0 right-0 bg-[#161616]/95 backdrop-blur-md border-t border-slate-800 p-4 z-40 shadow-2xl flex flex-col sm:flex-row items-center justify-between gap-4 max-w-6xl mx-auto px-6 rounded-t-3xl">
-        {/* Playback Transport Buttons */}
+      {/* Dock Transport */}
+      <div className="fixed bottom-0 left-0 right-0 bg-[#121212]/95 backdrop-blur-md border-t border-[#2e2e2e] p-4 z-40 shadow-2xl flex flex-col sm:flex-row items-center justify-between gap-4 max-w-6xl mx-auto px-6 rounded-t-3xl">
         <div className="flex items-center gap-3">
           <button
             onClick={onPlayPause}
-            className="w-12 h-12 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold flex items-center justify-center shadow-lg shadow-indigo-600/30 transition-all active:scale-95 text-lg"
+            className="w-12 h-12 rounded-xl bg-[#2563eb] hover:bg-[#1d4ed8] text-white font-bold flex items-center justify-center shadow-lg shadow-blue-600/30 transition-all active:scale-95 text-lg cursor-pointer"
           >
             {isPlaying ? '⏸️' : '▶️'}
           </button>
           <button
             onClick={onStop}
-            className="w-10 h-10 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold flex items-center justify-center border border-slate-700 transition-all text-sm"
+            className="w-10 h-10 rounded-xl bg-[#1e1e1e] hover:bg-[#262626] text-white font-bold flex items-center justify-center border border-[#2e2e2e] transition-all text-sm cursor-pointer"
             title="Parar"
           >
             ⏹️
           </button>
-          <div className="text-xs font-mono font-bold text-slate-300 ml-1">
+          <div className="text-xs font-mono font-bold text-[#3b82f6] bg-[#000000] px-3 py-2 rounded-lg border border-[#2e2e2e]">
             {formatTime(currentTime)} / {formatTime(duration)}
           </div>
         </div>
 
-        {/* Scrubbing Timeline */}
         <div className="flex-1 w-full max-w-xl mx-2">
           <input
             type="range"
@@ -284,25 +267,24 @@ export const StudioMixerConsole: React.FC<StudioMixerConsoleProps> = ({
             step="0.1"
             value={currentTime}
             onChange={(e) => onSeek(parseFloat(e.target.value))}
-            className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+            className="w-full h-2 bg-[#1e1e1e] rounded-lg appearance-none cursor-pointer accent-[#2563eb]"
           />
         </div>
 
-        {/* Pitch Shift ("Mudar o Tom") Controls */}
-        <div className="flex items-center gap-3 bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-xl">
-          <span className="text-xs font-bold text-slate-400">Mudar o Tom:</span>
+        <div className="flex items-center gap-3 bg-[#0a0a0a] border border-[#2e2e2e] px-3.5 py-2 rounded-xl">
+          <span className="text-xs font-bold text-[#a3a3a3]">Mudar Tom:</span>
           <button
             onClick={() => onPitchChange(Math.max(pitchSemitones - 1, -6))}
-            className="w-6 h-6 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 font-black text-xs border border-slate-700"
+            className="w-7 h-7 rounded-lg bg-[#1e1e1e] hover:bg-[#262626] text-white font-black text-xs border border-[#2e2e2e] cursor-pointer"
           >
             -
           </button>
-          <span className="text-xs font-mono font-bold text-amber-400 min-w-[32px] text-center">
+          <span className="text-xs font-mono font-bold text-white min-w-[32px] text-center">
             {pitchSemitones > 0 ? `+${pitchSemitones}` : pitchSemitones} ST
           </span>
           <button
             onClick={() => onPitchChange(Math.min(pitchSemitones + 1, 6))}
-            className="w-6 h-6 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 font-black text-xs border border-slate-700"
+            className="w-7 h-7 rounded-lg bg-[#1e1e1e] hover:bg-[#262626] text-white font-black text-xs border border-[#2e2e2e] cursor-pointer"
           >
             +
           </button>
@@ -311,3 +293,5 @@ export const StudioMixerConsole: React.FC<StudioMixerConsoleProps> = ({
     </div>
   );
 };
+
+export default StudioMixerConsole;

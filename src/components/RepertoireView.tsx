@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { RepertoireCategory, RepertoireSong, OfflineAudioRecord } from '../hooks/useIndexedDBSync';
+import { TrebleClefIcon } from './TrebleClefIcon';
 
 interface RepertoireViewProps {
   categories: RepertoireCategory[];
@@ -36,27 +37,27 @@ export const RepertoireView: React.FC<RepertoireViewProps> = ({
       : songs.filter((s) => s.category.toLowerCase() === activeCategory.toLowerCase());
 
   return (
-    <div className="repertoire-container bg-[#1a1a1a] text-slate-100 p-6 rounded-3xl border border-slate-800 shadow-2xl">
+    <div className="repertoire-container bg-[#121212] text-white p-6 rounded-3xl border border-[#2e2e2e] shadow-2xl space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8 pb-6 border-b border-slate-800">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-[#2e2e2e]">
         <div>
-          <h1 className="text-2xl font-black text-white flex items-center gap-3">
+          <h1 className="text-2xl font-extrabold text-white flex items-center gap-3">
             <span>📚</span> Meu Repertório
           </h1>
-          <p className="text-xs text-slate-400 mt-1 font-medium">
-            Gerencie suas músicas por categoria e abra diretamente na Mesa de Som (Mixer DAW)
+          <p className="text-xs text-[#a3a3a3] mt-1 font-medium">
+            Gerencie suas músicas por categoria e abra diretamente no Mixer do Treino Vocal
           </p>
         </div>
 
         <div className="flex items-center gap-3">
           <button
             onClick={() => setShowCatModal(true)}
-            className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-2"
+            className="px-4 py-2.5 bg-[#1e1e1e] hover:bg-[#262626] text-white border border-[#2e2e2e] rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer"
           >
             ➕ Nova Pasta
           </button>
-          <label className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer flex items-center gap-2">
-            📤 Importar Música / Vídeo
+          <label className="px-4 py-2.5 bg-[#2563eb] hover:bg-[#1d4ed8] text-white rounded-xl text-xs font-bold transition-all shadow-lg shadow-blue-600/30 cursor-pointer flex items-center gap-2">
+            📤 Importar Áudio / Vídeo
             <input
               type="file"
               accept="audio/*,video/*"
@@ -71,17 +72,23 @@ export const RepertoireView: React.FC<RepertoireViewProps> = ({
         </div>
       </div>
 
-      {/* Category Folders Tabs */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-4 mb-6 scrollbar-none">
+      {/* Category Folders Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-6">
         <button
           onClick={() => setActiveCategory('all')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-2 ${
+          className={`p-4 rounded-2xl text-xs font-bold transition-all text-left flex items-center justify-between border cursor-pointer ${
             activeCategory === 'all'
-              ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
-              : 'bg-slate-800/80 text-slate-400 hover:bg-slate-800 hover:text-slate-200 border border-slate-700/50'
+              ? 'bg-[#1e1e1e] border-[#2563eb] text-white ring-2 ring-[#2563eb]/30'
+              : 'bg-[#121212] border-[#2e2e2e] text-[#a3a3a3] hover:border-[#404040] hover:text-white'
           }`}
         >
-          <span>📂</span> Todos os Treinos ({songs.length + offlineAudios.length})
+          <div className="flex items-center gap-3">
+            <span className="text-xl">📂</span>
+            <span>Todas as Pastas</span>
+          </div>
+          <span className="text-xs font-mono font-bold px-2 py-0.5 bg-[#1e1e1e] rounded text-[#3b82f6]">
+            {songs.length + offlineAudios.length}
+          </span>
         </button>
 
         {categories.map((cat) => {
@@ -90,125 +97,111 @@ export const RepertoireView: React.FC<RepertoireViewProps> = ({
             <button
               key={cat.id}
               onClick={() => setActiveCategory(cat.id)}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-2 ${
+              className={`p-4 rounded-2xl text-xs font-bold transition-all text-left flex items-center justify-between border cursor-pointer ${
                 activeCategory === cat.id
-                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
-                  : 'bg-slate-800/80 text-slate-400 hover:bg-slate-800 hover:text-slate-200 border border-slate-700/50'
+                  ? 'bg-[#1e1e1e] border-[#2563eb] text-white ring-2 ring-[#2563eb]/30'
+                  : 'bg-[#121212] border-[#2e2e2e] text-[#a3a3a3] hover:border-[#404040] hover:text-white'
               }`}
             >
-              <span>{cat.icon || '📁'}</span> {cat.name} ({count})
+              <div className="flex items-center gap-3">
+                <span className="text-xl">{cat.icon || '📁'}</span>
+                <span>{cat.name}</span>
+              </div>
+              <span className="text-xs font-mono font-bold px-2 py-0.5 bg-[#1e1e1e] rounded text-[#a3a3a3]">
+                {count}
+              </span>
             </button>
           );
         })}
       </div>
 
-      {/* Repertoire Song Cards List */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {/* Render Offline Audios saved in IndexedDB */}
+      {/* Repertoire Song Cards Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+        {/* Offline Audios */}
         {offlineAudios
           .filter((item) => item.type === 'original')
           .map((item) => (
             <div
               key={item.id}
-              className="bg-slate-900/90 border border-slate-800 hover:border-indigo-500/50 p-5 rounded-2xl transition-all shadow-md flex flex-col justify-between group"
+              className="bg-[#121212] border border-[#2e2e2e] hover:border-[#2563eb] p-5 rounded-2xl transition-all shadow-md flex flex-col justify-between group"
             >
               <div className="flex items-start justify-between gap-3 mb-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-indigo-950/60 border border-indigo-800/50 text-indigo-400 flex items-center justify-center font-bold text-lg">
-                    🎵
+                  <div className="w-10 h-10 rounded-xl bg-[#1e1e1e] border border-[#2e2e2e] text-[#2563eb] flex items-center justify-center font-bold text-lg">
+                    <TrebleClefIcon className="w-6 h-6" color="#2563eb" />
                   </div>
                   <div>
-                    <h3 className="text-sm font-bold text-slate-100 group-hover:text-indigo-400 transition-colors line-clamp-1">
+                    <h3 className="text-sm font-bold text-white group-hover:text-[#3b82f6] transition-colors line-clamp-1">
                       {item.name}
                     </h3>
-                    <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
+                    <span className="text-[10px] font-semibold text-[#a3a3a3] uppercase tracking-wider block mt-0.5">
                       Salvo Offline no IndexedDB
                     </span>
                   </div>
                 </div>
-                <span
-                  className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                    item.syncedToDrive
-                      ? 'bg-emerald-950 text-emerald-400 border border-emerald-800/50'
-                      : 'bg-amber-950 text-amber-400 border border-amber-800/50'
-                  }`}
-                >
-                  {item.syncedToDrive ? '☁️ Sincronizado' : '⏳ Pendente'}
-                </span>
               </div>
 
-              <div className="flex items-center justify-between pt-3 border-t border-slate-800/60">
-                <span className="text-[11px] font-medium text-slate-500">
+              <div className="flex items-center justify-between pt-3 border-t border-[#2e2e2e]">
+                <span className="text-[11px] font-medium text-[#737373]">
                   {new Date(item.createdAt).toLocaleDateString('pt-BR')}
                 </span>
                 <button
                   onClick={() => onSelectSongToMixer(item.name, item.name)}
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-600/20 active:scale-95 flex items-center gap-2"
+                  className="px-4 py-2 bg-[#2563eb] hover:bg-[#1d4ed8] text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-blue-600/20 active:scale-95 flex items-center gap-2 cursor-pointer"
                 >
-                  🎛️ Abrir na Mesa de Som
+                  🎛️ Abrir no Mixer
                 </button>
               </div>
             </div>
           ))}
 
-        {/* Custom Created Songs */}
+        {/* Custom Songs */}
         {filteredSongs.map((song) => (
           <div
             key={song.id}
-            className="bg-slate-900/90 border border-slate-800 hover:border-indigo-500/50 p-5 rounded-2xl transition-all shadow-md flex flex-col justify-between group"
+            className="bg-[#121212] border border-[#2e2e2e] hover:border-[#2563eb] p-5 rounded-2xl transition-all shadow-md flex flex-col justify-between group"
           >
             <div className="flex items-start justify-between gap-3 mb-4">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-purple-950/60 border border-purple-800/50 text-purple-400 flex items-center justify-center font-bold text-lg">
-                  🎶
+                <div className="w-10 h-10 rounded-xl bg-[#1e1e1e] border border-[#2e2e2e] text-[#2563eb] flex items-center justify-center font-bold text-lg">
+                  <TrebleClefIcon className="w-6 h-6" color="#2563eb" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-slate-100 group-hover:text-purple-400 transition-colors line-clamp-1">
+                  <h3 className="text-sm font-bold text-white group-hover:text-[#3b82f6] transition-colors line-clamp-1">
                     {song.title}
                   </h3>
-                  <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
+                  <span className="text-[10px] font-semibold text-[#a3a3a3] uppercase tracking-wider block mt-0.5">
                     Categoria: {song.category}
                   </span>
                 </div>
               </div>
             </div>
 
-            <div className="flex items-center justify-between pt-3 border-t border-slate-800/60">
-              <span className="text-[11px] font-medium text-slate-500">
+            <div className="flex items-center justify-between pt-3 border-t border-[#2e2e2e]">
+              <span className="text-[11px] font-medium text-[#737373]">
                 {new Date(song.createdAt).toLocaleDateString('pt-BR')}
               </span>
               <button
                 onClick={() => onSelectSongToMixer(song.title, song.fileName)}
-                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-600/20 active:scale-95 flex items-center gap-2"
+                className="px-4 py-2 bg-[#2563eb] hover:bg-[#1d4ed8] text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-blue-600/20 active:scale-95 flex items-center gap-2 cursor-pointer"
               >
-                🎛️ Abrir na Mesa de Som
+                🎛️ Abrir no Mixer
               </button>
             </div>
           </div>
         ))}
       </div>
 
-      {/* Empty State */}
-      {songs.length === 0 && offlineAudios.length === 0 && (
-        <div className="text-center py-16 bg-slate-900/40 rounded-2xl border border-slate-800/60 my-4">
-          <div className="text-4xl mb-3">📁</div>
-          <h3 className="text-base font-bold text-slate-300">Nenhuma música no repertório ainda</h3>
-          <p className="text-xs text-slate-500 max-w-sm mx-auto mt-1 mb-6">
-            Faça upload de um arquivo MP3 ou vídeo de treino para ter os áudios e vozes salvos localmente.
-          </p>
-        </div>
-      )}
-
       {/* New Category Modal */}
       {showCatModal && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <form
             onSubmit={handleCreateCategory}
-            className="bg-slate-900 border border-slate-700 rounded-3xl p-6 w-full max-w-md shadow-2xl"
+            className="bg-[#121212] border border-[#2e2e2e] rounded-2xl p-6 w-full max-w-md shadow-2xl space-y-5"
           >
             <h3 className="text-lg font-bold text-white mb-2">📁 Criar Nova Pasta no Repertório</h3>
-            <p className="text-xs text-slate-400 mb-6">
-              Organize seus exercícios de afinação e apresentações em categorias customizadas.
+            <p className="text-xs text-[#a3a3a3]">
+              Organize seus exercícios de afinação e apresentações no Treino Vocal.
             </p>
 
             <input
@@ -216,21 +209,21 @@ export const RepertoireView: React.FC<RepertoireViewProps> = ({
               placeholder="Ex: Exercícios Diários, Apresentação Coral..."
               value={newCatName}
               onChange={(e) => setNewCatName(e.target.value)}
-              className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white focus:outline-none focus:border-indigo-500 mb-6"
+              className="w-full px-4 py-3 bg-[#1e1e1e] border border-[#2e2e2e] rounded-xl text-sm text-white focus:outline-none focus:border-[#2563eb]"
               autoFocus
             />
 
-            <div className="flex items-center justify-end gap-3">
+            <div className="flex items-center justify-end gap-3 pt-2">
               <button
                 type="button"
                 onClick={() => setShowCatModal(false)}
-                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold"
+                className="px-4 py-2.5 bg-[#1e1e1e] hover:bg-[#262626] text-[#a3a3a3] hover:text-white rounded-xl text-xs font-bold border border-[#2e2e2e] cursor-pointer"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
-                className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold"
+                className="px-5 py-2.5 bg-[#2563eb] hover:bg-[#1d4ed8] text-white rounded-xl text-xs font-bold shadow-lg shadow-blue-600/30 cursor-pointer"
               >
                 Criar Pasta
               </button>
@@ -241,3 +234,5 @@ export const RepertoireView: React.FC<RepertoireViewProps> = ({
     </div>
   );
 };
+
+export default RepertoireView;

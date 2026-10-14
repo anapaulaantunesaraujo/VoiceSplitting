@@ -107,20 +107,77 @@ self.onmessage = async (event: MessageEvent<StemSeparationWorkerInput>) => {
       postMessage({
         type: 'PROGRESS',
         progress: 0.7,
-        message: 'Aplicando filtro DSP de formantes vocais (Fórmula de Filtro Passa-Banda)...'
+        message: 'Aplicando extração Mid-Side e filtro DSP de formantes vocais (85Hz-4200Hz)...'
       } as StemSeparationWorkerProgress);
 
-      const alpha = 0.15;
-      let prevVal = 0;
+      // 1. Mid-Side Stereo Extraction (Isolates centered vocals)
+      const leftCh = channelData[0] || monoChannel;
+      const rightCh = channelData[1] || leftCh;
+
+      // 2. Biquad Bandpass Filter Coefficients (Highpass ~85Hz, Lowpass ~4200Hz at sampleRate)
+      const sr = sampleRate || 44100;
+      
+      // Highpass 85Hz coefficients
+      const w0_hp = (2 * Math.PI * 85) / sr;
+      const cos_hp = Math.cos(w0_hp);
+      const alpha_hp = Math.sin(w0_hp) / (2 * 0.707);
+      const b0_hp = (1 + cos_hp) / 2;
+      const b1_hp = -(1 + cos_hp);
+      const b2_hp = (1 + cos_hp) / 2;
+      const a0_hp = 1 + alpha_hp;
+      const a1_hp = -2 * cos_hp;
+      const a2_hp = 1 - alpha_hp;
+
+      // Lowpass 4200Hz coefficients
+      const w0_lp = (2 * Math.PI * 4200) / sr;
+      const cos_lp = Math.cos(w0_lp);
+      const alpha_lp = Math.sin(w0_lp) / (2 * 0.707);
+      const b0_lp = (1 - cos_lp) / 2;
+      const b1_lp = 1 - cos_lp;
+      const b2_lp = (1 - cos_lp) / 2;
+      const a0_lp = 1 + alpha_lp;
+      const a1_lp = -2 * cos_lp;
+      const a2_lp = 1 - alpha_lp;
+
+      let hp_x1 = 0, hp_x2 = 0, hp_y1 = 0, hp_y2 = 0;
+      let lp_x1 = 0, lp_x2 = 0, lp_y1 = 0, lp_y2 = 0;
 
       for (let i = 0; i < length; i++) {
-        const currentVal = monoChannel[i];
-        const vocalEst = alpha * (prevVal + currentVal);
-        prevVal = currentVal;
+        const l = leftCh[i] || 0;
+        const r = rightCh[i] || 0;
 
-        const vocalVal = Math.max(-1, Math.min(1, vocalEst * 1.8));
+        // Center Vocal Isolation via Mid-Side
+        const mid = (l + r) * 0.5;
+        const side = (l - r) * 0.5;
+        const vocalRaw = mid - 0.4 * Math.abs(side);
+
+        // Highpass Filter (Remove sub-bass rumble < 85Hz)
+        const hp_out =
+          (b0_hp / a0_hp) * vocalRaw +
+          (b1_hp / a0_hp) * hp_x1 +
+          (b2_hp / a0_hp) * hp_x2 -
+          (a1_hp / a0_hp) * hp_y1 -
+          (a2_hp / a0_hp) * hp_y2;
+        hp_x2 = hp_x1;
+        hp_x1 = vocalRaw;
+        hp_y2 = hp_y1;
+        hp_y1 = hp_out;
+
+        // Lowpass Filter (Remove high cymbal sizzle > 4200Hz)
+        const lp_out =
+          (b0_lp / a0_lp) * hp_out +
+          (b1_lp / a0_lp) * lp_x1 +
+          (b2_lp / a0_lp) * lp_x2 -
+          (a1_lp / a0_lp) * lp_y1 -
+          (a2_lp / a0_lp) * lp_y2;
+        lp_x2 = lp_x1;
+        lp_x1 = hp_out;
+        lp_y2 = lp_y1;
+        lp_y1 = lp_out;
+
+        const vocalVal = Math.max(-1, Math.min(1, lp_out * 1.4));
         vocalChannel[i] = vocalVal;
-        accompanimentChannel[i] = currentVal - vocalVal * 0.7;
+        accompanimentChannel[i] = Math.max(-1, Math.min(1, monoChannel[i] - vocalVal * 0.8));
       }
     }
 

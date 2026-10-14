@@ -1,14 +1,15 @@
-import React, { useState, useEffect, ChangeEvent, DragEvent, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import * as Tone from 'tone';
 import { usePitchShift } from './hooks/usePitchShift';
 import { useMultiStemMixer } from './hooks/useMultiStemMixer';
 import { useVocalTuner } from './hooks/useVocalTuner';
 import { useIndexedDBSync } from './hooks/useIndexedDBSync';
-import { Sidebar } from './components/Sidebar';
+import { useVocalEvaluation, VocalEvaluationResult } from './hooks/useVocalEvaluation';
 import { MoisesRepertoireView } from './components/MoisesRepertoireView';
 import { ReaperMixerConsole } from './components/ReaperMixerConsole';
-import { VocalTunerCanvas } from './components/VocalTunerCanvas';
+import { VocalEvaluationModal } from './components/VocalEvaluationModal';
 import { GoogleLoginButton, UserProfile } from './components/GoogleLoginButton';
+import { TrebleClefIcon } from './components/TrebleClefIcon';
 import { extractAudioFromVideo } from './utils/ffmpegAudioExtractor';
 import { separateStemsWithWorker } from './utils/stemSeparationClient';
 
@@ -19,6 +20,9 @@ export const MainApp: React.FC = () => {
     return saved ? JSON.parse(saved) : null;
   });
 
+  // Track active song title for evaluation reporting
+  const [currentSongTitle, setCurrentSongTitle] = useState<string>('Minha Música de Treino');
+
   // IndexedDB Single Source of Truth & Background Sync Hook
   const {
     savePracticeSession,
@@ -27,19 +31,13 @@ export const MainApp: React.FC = () => {
     categories,
     songs,
     addCategory,
+    renameCategory,
+    deleteCategory,
     triggerBackgroundSync
   } = useIndexedDBSync(userProfile);
 
-  // Sidebar state
-  const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(true);
-  const [selectedCategory, setSelectedCategory] = useState<string>('all');
-
-  // Active View Tab State ('home' | 'repertoire' | 'mixer' | 'exercises')
-  const [activeTab, setActiveTab] = useState<'home' | 'repertoire' | 'mixer' | 'exercises'>('repertoire');
-
-  // Drag and Drop state
-  const [isDragging, setIsDragging] = useState<boolean>(false);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  // Active View Tab State ('repertoire' | 'mixer')
+  const [activeTab, setActiveTab] = useState<'repertoire' | 'mixer'>('repertoire');
 
   // Positive Validation Continuous Pitch Streak Counter
   const [pitchStreak, setPitchStreak] = useState<number>(0);
@@ -66,11 +64,15 @@ export const MainApp: React.FC = () => {
     masterVolume,
     setMasterVolume,
     channels,
+    soloActiveStem,
     pitchSemitones: multiPitch,
     isPlaying: isMultiPlaying,
     duration: multiDuration,
     currentTime: multiCurrentTime,
-    seek: seekMulti
+    seek: seekMulti,
+    focusBoostMultiplier,
+    setFocusBoostMultiplier,
+    setOnSongEnded
   } = useMultiStemMixer();
 
   // Single Pitch Shift Hook
@@ -87,6 +89,19 @@ export const MainApp: React.FC = () => {
     error: tunerError
   } = useVocalTuner();
 
+  // Vocal Division Evaluation Hook
+  const {
+    isEvaluationMode,
+    setIsEvaluationMode,
+    isModalOpen: isEvalModalOpen,
+    setIsModalOpen: setIsEvalModalOpen,
+    evaluationResult,
+    liveStats,
+    recordSample,
+    finishEvaluation,
+    resetEvaluation
+  } = useVocalEvaluation();
+
   useEffect(() => {
     if (userProfile && navigator.onLine) {
       triggerBackgroundSync(userProfile);
@@ -98,8 +113,10 @@ export const MainApp: React.FC = () => {
     if (userPitch) {
       let isAccurate = false;
       if (targetPitch && targetPitch.frequency > 0) {
-        const centsDiff = Math.abs(1200 * (Math.log(userPitch.frequency / targetPitch.frequency) / Math.log(2)));
-        if (centsDiff <= 15) isAccurate = true;
+        let centsDiff = 1200 * (Math.log(userPitch.frequency / targetPitch.frequency) / Math.log(2));
+        while (centsDiff > 600) centsDiff -= 1200;
+        while (centsDiff < -600) centsDiff += 1200;
+        if (Math.abs(centsDiff) <= 15) isAccurate = true;
       } else if (Math.abs(userPitch.cents) <= 15) {
         isAccurate = true;
       }
@@ -127,15 +144,66 @@ export const MainApp: React.FC = () => {
   }, [isListening, pitchStreak, savePracticeSession]);
 
   // Synchronize target pitch extraction from ONNX vocal stem during audio playback
+  // Shift target pitch by harmonic interval according to the focused voice (e.g. +4 ST for Contralto 3ª, +7 ST for Tenor 5ª)
   useEffect(() => {
     if (isMultiPlaying && vocalStemBuffer) {
-      extractTargetPitchFromBuffer(vocalStemBuffer, multiCurrentTime);
+      const activeHarmonicShift = soloActiveStem ? (channels[soloActiveStem]?.semitoneInterval || 0) : 0;
+      extractTargetPitchFromBuffer(vocalStemBuffer, multiCurrentTime, activeHarmonicShift);
     }
-  }, [isMultiPlaying, multiCurrentTime, vocalStemBuffer, extractTargetPitchFromBuffer]);
+  }, [isMultiPlaying, multiCurrentTime, vocalStemBuffer, extractTargetPitchFromBuffer, soloActiveStem, channels]);
+
+  // Live sample recording for vocal evaluation mode
+  useEffect(() => {
+    if (isEvaluationMode && isMultiPlaying && userPitch && targetPitch && targetPitch.frequency > 0) {
+      const activeShift = soloActiveStem ? (channels[soloActiveStem]?.semitoneInterval || 0) : 0;
+      const melodyFreq = targetPitch.frequency / Math.pow(2, activeShift / 12);
+      recordSample(userPitch.frequency, melodyFreq, soloActiveStem || 'soprano');
+    }
+  }, [isEvaluationMode, isMultiPlaying, userPitch, targetPitch, soloActiveStem, channels, recordSample]);
+
+  // Song completion auto-finish for evaluation report
+  useEffect(() => {
+    setOnSongEnded(() => {
+      if (isEvaluationMode) {
+        finishEvaluation(soloActiveStem || 'soprano', currentSongTitle);
+      }
+    });
+  }, [setOnSongEnded, isEvaluationMode, finishEvaluation, soloActiveStem, currentSongTitle]);
+
+  const handleToggleEvaluationMode = useCallback(() => {
+    setIsEvaluationMode((prev) => {
+      const next = !prev;
+      if (next && !isListening) {
+        startTuner();
+      }
+      return next;
+    });
+  }, [isListening, startTuner, setIsEvaluationMode]);
+
+  const handleFinishEvaluationManual = useCallback(() => {
+    finishEvaluation(soloActiveStem || 'soprano', currentSongTitle);
+  }, [finishEvaluation, soloActiveStem, currentSongTitle]);
+
+  const handleRetryEvaluation = useCallback(() => {
+    setIsEvalModalOpen(false);
+    resetEvaluation();
+    seekMulti(0);
+    setTimeout(() => {
+      playMulti();
+    }, 100);
+  }, [setIsEvalModalOpen, resetEvaluation, seekMulti, playMulti]);
+
+  const handleSaveEvaluation = useCallback(
+    async (result: VocalEvaluationResult) => {
+      await savePracticeSession(result.totalSingingSeconds, result.accuracyPercentage >= 60);
+    },
+    [savePracticeSession]
+  );
 
   // Unified File Processor with IndexedDB offline storage & Drive sync
-  const processUploadedFile = async (file: File) => {
+  const processUploadedFile = async (file: File, targetCategory?: string) => {
     try {
+      setCurrentSongTitle(file.name.replace(/\.[^/.]+$/, ''));
       if (Tone.context.state !== 'running') {
         await Tone.start();
       }
@@ -147,7 +215,7 @@ export const MainApp: React.FC = () => {
 
       if (isVideo) {
         setProcessingStage('extracting');
-        setDidacticMessage('🎬 Extraindo áudio do vídeo com FFmpeg WebAssembly...');
+        setDidacticMessage('🎬 Extraindo áudio do vídeo...');
 
         const { audioFile, audioBuffer } = await extractAudioFromVideo(file, (prog) => {
           setDidacticMessage(`🎬 Extraindo áudio do vídeo... (${Math.round(prog.ratio * 100)}%)`);
@@ -166,11 +234,11 @@ export const MainApp: React.FC = () => {
       await loadAudio(targetAudioFile);
 
       // Save original audio file to IndexedDB for offline access
-      await saveAudioOffline(targetAudioFile.name, targetAudioFile, 'original');
+      await saveAudioOffline(targetAudioFile.name, targetAudioFile, 'original', targetCategory);
 
       if (targetAudioBuffer) {
         setProcessingStage('separating');
-        setDidacticMessage('🧠 Separando as vozes e o instrumental via Web Worker e ONNX...');
+        setDidacticMessage('🧠 Separando as vozes e o instrumental via Web Worker...');
         setIsWorkerProcessing(true);
         setWorkerProgress(0.1);
 
@@ -185,8 +253,8 @@ export const MainApp: React.FC = () => {
         const vBlob = await (await fetch(result.vocalBlobUrl)).blob();
         const aBlob = await (await fetch(result.accompanimentBlobUrl)).blob();
 
-        await saveAudioOffline(`Vocal_${file.name}`, vBlob, 'vocal');
-        await saveAudioOffline(`Instrumental_${file.name}`, aBlob, 'accompaniment');
+        await saveAudioOffline(`Vocal_${file.name}`, vBlob, 'vocal', targetCategory);
+        await saveAudioOffline(`Instrumental_${file.name}`, aBlob, 'accompaniment', targetCategory);
 
         setVocalStemBuffer(result.vocalAudioBuffer);
         extractTargetPitchFromBuffer(result.vocalAudioBuffer, 0);
@@ -199,12 +267,12 @@ export const MainApp: React.FC = () => {
 
       // Trigger background sync if online
       if (userProfile && navigator.onLine) {
-        setDidacticMessage('☁️ Sincronizando novos arquivos do IndexedDB para o Google Drive...');
+        setDidacticMessage('☁️ Sincronizando novos arquivos com o Google Drive...');
         await triggerBackgroundSync(userProfile);
       }
 
       setProcessingStage('done');
-      setDidacticMessage('🎉 Separação de voz e áudio concluída com sucesso!');
+      setDidacticMessage('🎉 Separação de vozes e áudio concluída!');
     } catch (err: any) {
       setProcessingStage('idle');
       setDidacticMessage(`⚠️ Erro ao processar o arquivo: ${err?.message || 'Falha ao ler o arquivo.'}`);
@@ -213,94 +281,69 @@ export const MainApp: React.FC = () => {
     }
   };
 
-  const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(true);
-  };
-
-  const handleDragLeave = (e: DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
-  };
-
-  const handleDrop = (e: DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
-    const file = e.dataTransfer.files?.[0];
-    if (file) {
-      processUploadedFile(file);
-    }
-  };
-
-  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      processUploadedFile(file);
-    }
-  };
-
   return (
-    <div className="app-layout bg-[#0b0b0d] text-slate-100 min-h-screen flex relative">
-      {/* Collapsible Moises.ai Sidebar */}
-      <Sidebar
-        isOpen={isSidebarOpen}
-        onToggle={() => setIsSidebarOpen(!isSidebarOpen)}
-        activeTab={activeTab}
-        onSelectTab={setActiveTab}
-        userProfile={userProfile}
-        onLoginClick={() => {}}
-        onLogoutClick={() => setUserProfile(null)}
-        categories={categories}
-        selectedCategory={selectedCategory}
-        onSelectCategory={setSelectedCategory}
-        onNewCategoryClick={() => {
-          const name = prompt('Nome da nova pasta:');
-          if (name) addCategory(name);
-        }}
-      />
+    <div className="app-layout bg-[#000000] text-white min-h-screen flex flex-col relative overflow-x-hidden">
+      {/* Sticky Top Header Navigation Bar with centered inner container */}
+      <header className="sticky top-0 z-40 bg-[#121212]/95 backdrop-blur-md border-b border-[#2e2e2e] shadow-2xl w-full py-1">
+        <div className="w-full max-w-[1600px] mx-auto px-6 sm:px-10 lg:px-14 py-4 sm:py-5 flex items-center justify-between">
+          <div className="flex items-center gap-10">
+            {/* Logo & App Name - Vertically Centered */}
+            <div
+              onClick={() => setActiveTab('repertoire')}
+              className="flex items-center gap-3.5 cursor-pointer group"
+            >
+              <div className="w-12 h-12 rounded-2xl bg-[#1e1e1e] border border-[#2e2e2e] flex items-center justify-center text-[#2563eb] shadow-md group-hover:scale-105 transition-transform">
+                <TrebleClefIcon className="w-7 h-7" color="#2563eb" />
+              </div>
+              <span className="font-black text-white text-2xl tracking-tight leading-none group-hover:text-[#3b82f6] transition-colors flex items-center">
+                Treino&nbsp;<span className="text-[#3b82f6]">Vocal</span>
+              </span>
+            </div>
 
-      {/* Main Content View Area */}
-      <div
-        className={`main-content flex-1 transition-all duration-300 ${
-          isSidebarOpen ? 'ml-64' : 'ml-20'
-        } p-6 overflow-x-hidden`}
-      >
-        {/* Top Navigation Header */}
-        <header className="flex items-center justify-between mb-8 pb-4 border-b border-slate-800/80">
-          <div>
-            <span className="text-xs font-bold text-indigo-400 uppercase tracking-widest block">
-              Voice Splitting Studio PWA
-            </span>
-            <h1 className="text-2xl font-black text-white tracking-tight">
-              {activeTab === 'repertoire' ? 'Meu Repertório' : 'Studio Mixer (REAPER DAW)'}
-            </h1>
+            {/* Navigation Bar Actions - Only displayed when inside the Mixer screen */}
+            {activeTab === 'mixer' && (
+              <nav className="flex items-center gap-5 pl-8 border-l border-[#2e2e2e]">
+                <button
+                  onClick={() => setActiveTab('repertoire')}
+                  className="px-12 py-3.5 bg-[#2563eb] hover:bg-[#1d4ed8] text-white shadow-blue-600/30 ring-2 ring-blue-500/40 rounded-xl text-base font-extrabold transition-all flex items-center gap-4 cursor-pointer shadow-lg whitespace-nowrap"
+                  title="Voltar à tela geral do Repertório (Todas as Pastas e Músicas)"
+                >
+                  <span className="text-xl leading-none">🏠</span>
+                  <span>Home / Repertório</span>
+                </button>
+              </nav>
+            )}
           </div>
 
+          {/* User Google Drive Account Action */}
           <div className="flex items-center gap-4">
             <GoogleLoginButton
               onLoginSuccess={(user) => setUserProfile(user)}
               onLogout={() => setUserProfile(null)}
             />
           </div>
-        </header>
+        </div>
+      </header>
 
-        {/* TAB 1: MEU REPERTÓRIO (Moises.ai Style File Manager) */}
-        {(activeTab === 'repertoire' || activeTab === 'home') && (
-          <div>
+      {/* Main Content Area - Doubled Top & Vertical Spacing for maximum breathing room */}
+      <main className="flex-1 w-full max-w-[1600px] mx-auto px-6 sm:px-10 lg:px-14 pt-20 sm:pt-24 pb-32 space-y-16 sm:space-y-20">
+        {/* VIEW 1: REPERTÓRIO (macOS Finder Style File Manager) */}
+        {activeTab === 'repertoire' && (
+          <div className="space-y-10">
             <MoisesRepertoireView
               categories={categories}
               songs={songs}
               offlineAudios={offlineAudios}
               onAddCategory={addCategory}
-              onSelectSongToMixer={async (_title, originalRecord) => {
+              onRenameCategory={renameCategory}
+              onDeleteCategory={deleteCategory}
+              onSelectSongToMixer={async (title, originalRecord) => {
                 if (Tone.context.state !== 'running') {
                   await Tone.start();
                 }
 
-                // If an offline original item was clicked, find corresponding vocal & accompaniment stems in IndexedDB
+                setCurrentSongTitle(title || originalRecord?.name || 'Música de Treino');
+
                 if (originalRecord && originalRecord.blob) {
                   const baseName = originalRecord.name;
                   const vocalRecord = offlineAudios.find(
@@ -313,6 +356,19 @@ export const MainApp: React.FC = () => {
                   const vocalFile = vocalRecord?.blob || originalRecord.blob;
                   const accFile = accRecord?.blob || originalRecord.blob;
 
+                  // Decode vocal stem buffer for target pitch extraction & vocal evaluation
+                  try {
+                    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+                    const ctx = new AudioContextClass();
+                    const arrBuf = await vocalFile.arrayBuffer();
+                    const decoded = await ctx.decodeAudioData(arrBuf);
+                    await ctx.close();
+                    setVocalStemBuffer(decoded);
+                    extractTargetPitchFromBuffer(decoded, 0);
+                  } catch (e) {
+                    console.warn('Could not decode vocal stem buffer for offline audio:', e);
+                  }
+
                   await loadMultiStems({
                     vocalUrl: vocalFile,
                     accompanimentUrl: accFile
@@ -323,56 +379,25 @@ export const MainApp: React.FC = () => {
               onUploadFile={processUploadedFile}
             />
 
-            {/* Featured Drag & Drop Dropzone */}
-            <section
-              className={`dropzone-container mt-8 p-8 rounded-3xl bg-[#141417] border-2 border-dashed ${
-                isDragging ? 'border-indigo-500 bg-indigo-950/20' : 'border-slate-800'
-              } text-center cursor-pointer transition-all hover:border-indigo-500/50`}
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
-              onClick={() => fileInputRef.current?.click()}
-            >
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="audio/*,video/*"
-                onChange={handleFileChange}
-                className="hidden"
-              />
-
-              {processingStage === 'idle' || processingStage === 'done' ? (
-                <div>
-                  <div className="text-4xl mb-3">📥</div>
-                  <h2 className="text-base font-bold text-white mb-1">
-                    Jogue sua música ou gravação de tela aqui
-                  </h2>
-                  <p className="text-xs text-slate-400 mb-4">
-                    Suporta arquivos de áudio (MP3, WAV, OGG) e vídeos (MP4, MOV, MKV)
-                  </p>
-                  <button className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-full text-xs font-bold shadow-lg shadow-indigo-600/30 transition-all">
-                    📁 Selecionar do Dispositivo
-                  </button>
-                </div>
-              ) : (
-                <div className="py-4">
-                  <div className="pulse-loader-ring mx-auto mb-3" />
-                  <p className="text-sm font-bold text-indigo-400 mb-2">{didacticMessage}</p>
-                  {isWorkerProcessing && (
-                    <div className="w-full max-w-xs mx-auto bg-slate-800 h-2 rounded-full overflow-hidden">
-                      <div
-                        className="bg-indigo-500 h-full transition-all duration-300"
-                        style={{ width: `${workerProgress * 100}%` }}
-                      />
-                    </div>
-                  )}
-                </div>
-              )}
-            </section>
+            {/* Processing / Separation Progress Banner */}
+            {processingStage !== 'idle' && processingStage !== 'done' && (
+              <div className="bg-[#121212] border border-[#2563eb] rounded-2xl p-6 text-center space-y-3 shadow-xl">
+                <div className="pulse-loader-ring mx-auto" />
+                <p className="text-sm font-bold text-[#3b82f6]">{didacticMessage}</p>
+                {isWorkerProcessing && (
+                  <div className="w-full max-w-xs mx-auto bg-[#1e1e1e] border border-[#2e2e2e] h-2.5 rounded-full overflow-hidden">
+                    <div
+                      className="bg-[#2563eb] h-full transition-all duration-300"
+                      style={{ width: `${workerProgress * 100}%` }}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
-        {/* TAB 2: STUDIO MIXER (REAPER DAW Style Console) */}
+        {/* VIEW 2: STUDIO MIXER CONSOLE */}
         {activeTab === 'mixer' && (
           <div>
             <ReaperMixerConsole
@@ -386,7 +411,12 @@ export const MainApp: React.FC = () => {
               onPitchChange={setMultiPitch}
               isPlaying={isMultiPlaying}
               onPlayPause={isMultiPlaying ? pauseMulti : playMulti}
-              onStop={stopMulti}
+              onStop={() => {
+                stopMulti();
+                if (isEvaluationMode && liveStats.totalSingingFrames >= 15) {
+                  finishEvaluation(soloActiveStem || 'soprano', currentSongTitle);
+                }
+              }}
               currentTime={multiCurrentTime}
               duration={multiDuration}
               onSeek={seekMulti}
@@ -396,19 +426,28 @@ export const MainApp: React.FC = () => {
               targetPitch={targetPitch}
               pitchStreak={pitchStreak}
               onBackToRepertoire={() => setActiveTab('repertoire')}
+              tunerError={tunerError}
+              focusedVoiceLabel={soloActiveStem ? `${channels[soloActiveStem].label} (${channels[soloActiveStem].harmonicRole})` : 'Voz Principal (1ª Tônica)'}
+              soloActiveStem={soloActiveStem}
+              focusBoostMultiplier={focusBoostMultiplier}
+              onFocusBoostChange={setFocusBoostMultiplier}
+              isEvaluationMode={isEvaluationMode}
+              onToggleEvaluationMode={handleToggleEvaluationMode}
+              liveStats={liveStats}
+              onFinishEvaluationManual={handleFinishEvaluationManual}
             />
-
-            {/* Positive Pitch Visualizer Canvas */}
-            <section className="bg-[#141417] p-6 rounded-3xl border border-slate-800 mt-6 shadow-2xl">
-              <h3 className="text-sm font-bold text-slate-300 mb-3 text-center uppercase tracking-wider">
-                🎤 Visualizador do Afinador & Validação Positiva
-              </h3>
-              {tunerError && <p className="text-amber-400 text-center text-xs mb-3">⚠️ {tunerError}</p>}
-              <VocalTunerCanvas userPitch={userPitch} targetPitch={targetPitch} streakCount={pitchStreak} />
-            </section>
           </div>
         )}
-      </div>
+      </main>
+
+      {/* Vocal Evaluation Results Modal */}
+      <VocalEvaluationModal
+        isOpen={isEvalModalOpen}
+        result={evaluationResult}
+        onClose={() => setIsEvalModalOpen(false)}
+        onRetry={handleRetryEvaluation}
+        onSaveToHistory={handleSaveEvaluation}
+      />
     </div>
   );
 };

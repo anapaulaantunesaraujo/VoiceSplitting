@@ -40,6 +40,7 @@ export interface OfflineAudioRecord {
   name: string;
   blob: Blob;
   type: 'vocal' | 'accompaniment' | 'original';
+  category?: string;
   createdAt: string;
   syncedToDrive: boolean;
 }
@@ -47,11 +48,13 @@ export interface OfflineAudioRecord {
 export interface UseIndexedDBSyncReturn {
   practiceHistory: UserVocalPracticeHistory;
   savePracticeSession: (secondsSpent: number, isAccurate: boolean) => Promise<void>;
-  saveAudioOffline: (name: string, blob: Blob, type: 'vocal' | 'accompaniment' | 'original') => Promise<void>;
+  saveAudioOffline: (name: string, blob: Blob, type: 'vocal' | 'accompaniment' | 'original', category?: string) => Promise<void>;
   offlineAudios: OfflineAudioRecord[];
   categories: RepertoireCategory[];
   songs: RepertoireSong[];
   addCategory: (name: string) => Promise<void>;
+  renameCategory: (catId: string, newName: string) => Promise<void>;
+  deleteCategory: (catId: string) => Promise<void>;
   addSongToCategory: (title: string, fileName: string, category: string) => Promise<void>;
   isSyncing: boolean;
   syncStatusLog: string | null;
@@ -74,9 +77,8 @@ export const useIndexedDBSync = (userProfile: UserProfile | null): UseIndexedDBS
   const [syncStatusLog, setSyncStatusLog] = useState<string | null>(null);
 
   const [categories, setCategories] = useState<RepertoireCategory[]>([
-    { id: 'exercicios', name: 'Exercícios', icon: '🎧' },
-    { id: 'apresentacoes', name: 'Apresentações', icon: '🎤' },
-    { id: 'estudos', name: 'Estudos Vocais', icon: '📚' }
+    { id: 'minhas-musicas', name: 'Minhas Músicas', icon: '🎵' },
+    { id: 'ensaios', name: 'Ensaios & Treinos', icon: '🎤' }
   ]);
   const [songs, setSongs] = useState<RepertoireSong[]>([]);
 
@@ -97,13 +99,12 @@ export const useIndexedDBSync = (userProfile: UserProfile | null): UseIndexedDBS
       setOfflineAudios(audios);
 
       const savedCategories = await repertoireStore.getItem<RepertoireCategory[]>('categories');
-      if (savedCategories) {
+      if (savedCategories && savedCategories.length > 0) {
         setCategories(savedCategories);
       } else {
         const defaultCats: RepertoireCategory[] = [
-          { id: 'exercicios', name: 'Exercícios', icon: '🎧' },
-          { id: 'apresentacoes', name: 'Apresentações', icon: '🎤' },
-          { id: 'estudos', name: 'Estudos Vocais', icon: '📚' }
+          { id: 'minhas-musicas', name: 'Minhas Músicas', icon: '🎵' },
+          { id: 'ensaios', name: 'Ensaios & Treinos', icon: '🎤' }
         ];
         await repertoireStore.setItem('categories', defaultCats);
       }
@@ -125,6 +126,22 @@ export const useIndexedDBSync = (userProfile: UserProfile | null): UseIndexedDBS
     };
     setCategories((prev) => {
       const updated = [...prev, newCat];
+      repertoireStore.setItem('categories', updated);
+      return updated;
+    });
+  }, []);
+
+  const renameCategory = useCallback(async (catId: string, newName: string) => {
+    setCategories((prev) => {
+      const updated = prev.map((cat) => (cat.id === catId ? { ...cat, name: newName } : cat));
+      repertoireStore.setItem('categories', updated);
+      return updated;
+    });
+  }, []);
+
+  const deleteCategory = useCallback(async (catId: string) => {
+    setCategories((prev) => {
+      const updated = prev.filter((cat) => cat.id !== catId);
       repertoireStore.setItem('categories', updated);
       return updated;
     });
@@ -176,13 +193,14 @@ export const useIndexedDBSync = (userProfile: UserProfile | null): UseIndexedDBS
   }, []);
 
   // 3. Save offline audio blob into IndexedDB
-  const saveAudioOffline = useCallback(async (name: string, blob: Blob, type: 'vocal' | 'accompaniment' | 'original') => {
+  const saveAudioOffline = useCallback(async (name: string, blob: Blob, type: 'vocal' | 'accompaniment' | 'original', category?: string) => {
     const id = `offline_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
     const record: OfflineAudioRecord = {
       id,
       name,
       blob,
       type,
+      category,
       createdAt: new Date().toISOString(),
       syncedToDrive: false
     };
@@ -270,6 +288,8 @@ export const useIndexedDBSync = (userProfile: UserProfile | null): UseIndexedDBS
     categories,
     songs,
     addCategory,
+    renameCategory,
+    deleteCategory,
     addSongToCategory,
     isSyncing,
     syncStatusLog,
