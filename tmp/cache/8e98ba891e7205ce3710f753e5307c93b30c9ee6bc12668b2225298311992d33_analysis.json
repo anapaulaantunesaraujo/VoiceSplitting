@@ -1,0 +1,21 @@
+{
+  "key": "Dó Maior (C)",
+  "root_note": "C",
+  "mode": "Major",
+  "bpm": 120,
+  "duration": 0.0,
+  "scale_notes": [
+    "C",
+    "D",
+    "E",
+    "F",
+    "G",
+    "A",
+    "B"
+  ],
+  "fallback": true,
+  "error": "Error opening 'tmp/uploads/analyze_3f3921db-e5cc-4663-b0ab-99d11af0c527_favicon.ico': Format not recognised.",
+  "file_hash": "8e98ba891e7205ce3710f753e5307c93b30c9ee6bc12668b2225298311992d33",
+  "filename": "favicon.ico",
+  "cached": false
+}

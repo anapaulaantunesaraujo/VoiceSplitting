@@ -253,7 +253,7 @@ export const VocalEvaluationModal: React.FC<VocalEvaluationModalProps> = ({
         <div className="flex flex-col sm:flex-row items-center gap-3 pt-2">
           <button
             onClick={onRetry}
-            className="w-full sm:flex-1 py-3.5 px-6 rounded-xl bg-[#2563eb] hover:bg-[#1d4ed8] text-white font-extrabold text-sm transition-all shadow-lg shadow-blue-600/30 flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+            className="w-full sm:flex-1 py-4 px-8 rounded-2xl bg-[#2563eb] hover:bg-[#1d4ed8] text-white font-extrabold text-sm transition-all shadow-lg shadow-blue-600/30 flex items-center justify-center gap-2 cursor-pointer active:scale-95 shrink-0"
           >
             <span>🔄 Treinar Novamente</span>
           </button>
@@ -262,7 +262,7 @@ export const VocalEvaluationModal: React.FC<VocalEvaluationModalProps> = ({
             <button
               onClick={handleSave}
               disabled={isSaved}
-              className={`w-full sm:w-auto py-3.5 px-6 rounded-xl font-bold text-sm border transition-all flex items-center justify-center gap-2 cursor-pointer ${
+              className={`w-full sm:w-auto py-4 px-8 rounded-2xl font-bold text-sm border transition-all flex items-center justify-center gap-2 cursor-pointer shrink-0 ${
                 isSaved
                   ? 'bg-emerald-950/60 border-emerald-500/50 text-emerald-400 cursor-default'
                   : 'bg-[#1e1e1e] hover:bg-[#262626] border-[#2e2e2e] text-white'
@@ -274,7 +274,7 @@ export const VocalEvaluationModal: React.FC<VocalEvaluationModalProps> = ({
 
           <button
             onClick={onClose}
-            className="w-full sm:w-auto py-3.5 px-6 rounded-xl bg-[#1e1e1e] hover:bg-[#262626] border border-[#2e2e2e] text-[#a3a3a3] hover:text-white font-bold text-sm transition-all cursor-pointer"
+            className="w-full sm:w-auto py-4 px-8 rounded-2xl bg-[#1e1e1e] hover:bg-[#262626] border border-[#2e2e2e] text-[#a3a3a3] hover:text-white font-bold text-sm transition-all cursor-pointer shrink-0"
           >
             <span>Fechar</span>
           </button>

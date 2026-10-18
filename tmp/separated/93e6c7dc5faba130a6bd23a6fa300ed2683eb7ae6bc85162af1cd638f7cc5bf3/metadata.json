@@ -1,0 +1,27 @@
+{
+  "status": "success",
+  "job_id": "93e6c7dc5faba130a6bd23a6fa300ed2683eb7ae6bc85162af1cd638f7cc5bf3",
+  "filename": "Cantigo de maria_audio.wav",
+  "musical_analysis": {
+    "key": "Si Menor (Bm)",
+    "root_note": "B",
+    "mode": "Minor",
+    "bpm": 161,
+    "duration": 60.0,
+    "scale_notes": [
+      "B",
+      "C#",
+      "D",
+      "E",
+      "F#",
+      "G",
+      "A"
+    ],
+    "confidence": 0.79
+  },
+  "stems": {
+    "vocals_url": "/api/stems/93e6c7dc5faba130a6bd23a6fa300ed2683eb7ae6bc85162af1cd638f7cc5bf3/vocals",
+    "accompaniment_url": "/api/stems/93e6c7dc5faba130a6bd23a6fa300ed2683eb7ae6bc85162af1cd638f7cc5bf3/accompaniment"
+  },
+  "cached": false
+}

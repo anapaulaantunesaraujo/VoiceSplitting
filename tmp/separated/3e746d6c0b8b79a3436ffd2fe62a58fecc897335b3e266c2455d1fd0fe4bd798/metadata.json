@@ -1,0 +1,27 @@
+{
+  "status": "success",
+  "job_id": "3e746d6c0b8b79a3436ffd2fe62a58fecc897335b3e266c2455d1fd0fe4bd798",
+  "filename": "O Filho de Deus (Ao Vivo) _ fhop music.mp3",
+  "musical_analysis": {
+    "key": "Ré Maior (D)",
+    "root_note": "D",
+    "mode": "Major",
+    "bpm": 123,
+    "duration": 60.0,
+    "scale_notes": [
+      "D",
+      "E",
+      "F#",
+      "G",
+      "A",
+      "B",
+      "C#"
+    ],
+    "confidence": 0.9
+  },
+  "stems": {
+    "vocals_url": "/api/stems/3e746d6c0b8b79a3436ffd2fe62a58fecc897335b3e266c2455d1fd0fe4bd798/vocals",
+    "accompaniment_url": "/api/stems/3e746d6c0b8b79a3436ffd2fe62a58fecc897335b3e266c2455d1fd0fe4bd798/accompaniment"
+  },
+  "cached": false
+}

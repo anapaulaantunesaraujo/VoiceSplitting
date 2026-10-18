@@ -100,10 +100,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </span>
               <button
                 onClick={onNewCategoryClick}
-                className="px-2 py-1 bg-[#2563eb] hover:bg-[#1d4ed8] text-white text-[11px] font-bold rounded-md transition-colors cursor-pointer"
+                className="px-4 py-1.5 bg-[#2563eb] hover:bg-[#1d4ed8] text-white text-xs font-bold rounded-xl transition-all cursor-pointer shrink-0 min-w-fit flex items-center gap-1 shadow-sm"
                 title="Nova Pasta"
               >
-                + Criar
+                <span>+</span>
+                <span className="px-1">Criar</span>
               </button>
             </div>
 

@@ -16,6 +16,7 @@ export async function getFFmpegInstance(onProgress?: (progress: ExtractAudioProg
   const ffmpeg = new FFmpeg();
 
   ffmpeg.on('log', ({ message }) => {
+    if (message === 'Aborted()') return;
     console.log('[FFmpeg WASM]', message);
   });
 

@@ -15,22 +15,24 @@ export interface StemChannelState {
 }
 
 export interface MultiStemMixerOptions {
-  vocalUrl: string | File;
-  accompanimentUrl: string | File;
-  sopranoUrl?: string | File;
-  mezzoSopranoUrl?: string | File;
-  contraltoUrl?: string | File;
-  tenorUrl?: string | File;
-  baritoneUrl?: string | File;
-  bassUrl?: string | File;
+  vocalUrl: string | File | Blob;
+  accompanimentUrl: string | File | Blob;
+  sopranoUrl?: string | File | Blob;
+  mezzoSopranoUrl?: string | File | Blob;
+  contraltoUrl?: string | File | Blob;
+  tenorUrl?: string | File | Blob;
+  baritoneUrl?: string | File | Blob;
+  bassUrl?: string | File | Blob;
 }
 
 export interface UseMultiStemMixerReturn {
   loadStems: (options: MultiStemMixerOptions) => Promise<void>;
+  switchVocalStem: (newVocalUrl: string | File | Blob) => Promise<void>;
   play: () => Promise<void>;
   pause: () => void;
   stop: () => void;
   setPitchSemitones: (semitones: number) => void;
+  setVocalHarmonicShift: (semitones: number) => void;
   setChannelVolume: (id: StemChannelId, volume: number) => void;
   toggleMute: (id: StemChannelId) => void;
   toggleSolo: (id: StemChannelId) => void;
@@ -58,13 +60,13 @@ export interface UseMultiStemMixerReturn {
 // - Baixo: Fundamental em oitava baixa (em Dó Maior = Dó grave)
 // Eliminates any misleading abbreviations like 'Grave F' or 'Agudo M'.
 const DEFAULT_CHANNELS: Record<StemChannelId, StemChannelState> = {
-  soprano: { id: 'soprano', label: 'Soprano', harmonicRole: '1ª Tônica (Melodia)', semitoneInterval: 0, volume: 0.9, isMuted: false, isSolo: false, color: '#ec4899' },
-  mezzoSoprano: { id: 'mezzoSoprano', label: 'Mezzo-soprano', harmonicRole: 'Harmonia Intermediária', semitoneInterval: 4, volume: 0.0, isMuted: false, isSolo: false, color: '#f43f5e' },
-  contralto: { id: 'contralto', label: 'Contralto', harmonicRole: '3ª Terça (Harmonia)', semitoneInterval: 4, volume: 0.0, isMuted: false, isSolo: false, color: '#8b5cf6' },
-  tenor: { id: 'tenor', label: 'Tenor', harmonicRole: '5ª Quinta (Harmonia)', semitoneInterval: 7, volume: 0.0, isMuted: false, isSolo: false, color: '#3b82f6' },
-  baritone: { id: 'baritone', label: 'Barítono', harmonicRole: 'Harmonia / Base', semitoneInterval: -5, volume: 0.0, isMuted: false, isSolo: false, color: '#06b6d4' },
-  bass: { id: 'bass', label: 'Baixo', harmonicRole: 'Fundamental (8ª Baixa)', semitoneInterval: -12, volume: 0.0, isMuted: false, isSolo: false, color: '#10b981' },
-  accompaniment: { id: 'accompaniment', label: 'Instrumental', harmonicRole: 'Base Harmônica', semitoneInterval: 0, volume: 0.8, isMuted: false, isSolo: false, color: '#f59e0b' }
+  soprano: { id: 'soprano', label: 'Soprano', harmonicRole: '1ª Tônica (Melodia)', semitoneInterval: 0, volume: 1.0, isMuted: false, isSolo: false, color: '#ec4899' },
+  mezzoSoprano: { id: 'mezzoSoprano', label: 'Mezzo-soprano', harmonicRole: 'Harmonia Intermediária', semitoneInterval: 4, volume: 1.0, isMuted: false, isSolo: false, color: '#f43f5e' },
+  contralto: { id: 'contralto', label: 'Contralto', harmonicRole: '3ª Terça (Harmonia)', semitoneInterval: 4, volume: 1.0, isMuted: false, isSolo: false, color: '#8b5cf6' },
+  tenor: { id: 'tenor', label: 'Tenor', harmonicRole: '5ª Quinta (Harmonia)', semitoneInterval: 7, volume: 1.0, isMuted: false, isSolo: false, color: '#3b82f6' },
+  baritone: { id: 'baritone', label: 'Barítono', harmonicRole: 'Harmonia / Base', semitoneInterval: -5, volume: 1.0, isMuted: false, isSolo: false, color: '#06b6d4' },
+  bass: { id: 'bass', label: 'Baixo', harmonicRole: 'Fundamental (8ª Baixa)', semitoneInterval: -12, volume: 1.0, isMuted: false, isSolo: false, color: '#10b981' },
+  accompaniment: { id: 'accompaniment', label: 'Instrumental', harmonicRole: 'Base Harmônica', semitoneInterval: 0, volume: 0.4, isMuted: false, isSolo: false, color: '#f59e0b' }
 };
 
 export const useMultiStemMixer = (): UseMultiStemMixerReturn => {
@@ -92,62 +94,37 @@ export const useMultiStemMixer = (): UseMultiStemMixerReturn => {
 
   // Tone.js Audio Graph Nodes
   const pitchShiftRef = useRef<Tone.PitchShift | null>(null);
+  const vocalPitchShiftRef = useRef<Tone.PitchShift | null>(null);
+  const activeHarmonicShiftRef = useRef<number>(0);
   const masterGainRef = useRef<Tone.Gain | null>(null);
-  const vocalLimiterRef = useRef<Tone.Limiter | null>(null);
-  const vocalCompressorRef = useRef<Tone.Compressor | null>(null);
 
-  // Dedicated GainNode & Tone.Player per stem
+  // Dedicated GainNode & Tone.Player per stem (only 2 active tracks: accompaniment and vocal)
   const channelGainsRef = useRef<Partial<Record<StemChannelId, Tone.Gain>>>({});
   const playersRef = useRef<Partial<Record<StemChannelId, Tone.Player>>>({});
 
   const animFrameRef = useRef<number | null>(null);
 
-  // Helper to ensure Web Audio Graph is initialized with bypassed PitchShift (wet=0) when semitones === 0
+  // Helper to ensure Web Audio Graph is initialized with direct clean routing
   const ensureAudioGraph = useCallback(() => {
-    if (pitchShiftRef.current) return;
+    if (masterGainRef.current) return;
 
-    const pitchShift = new Tone.PitchShift({
-      pitch: 0,
-      windowSize: 0.1,
-      delayTime: 0,
-      feedback: 0
-    }).toDestination();
-
-    // Bypassed by default to ensure ZERO pitch shifting, phase vocoder delay, or pitch artifacts
-    pitchShift.wet.value = 0;
-
-    const masterGain = new Tone.Gain(0.9).connect(pitchShift);
-
-    // Brickwall limiter at master input prevents any digital clipping from high vocal gains
-    const vocalLimiter = new Tone.Limiter(-0.5).connect(masterGain);
-
-    // Musical, transparent vocal bus compressor (smooth threshold, preserves full dynamic punch)
-    const vocalCompressor = new Tone.Compressor({
-      threshold: -8,
-      ratio: 2,
-      attack: 0.005,
-      release: 0.05
-    }).connect(vocalLimiter);
-
-    pitchShiftRef.current = pitchShift;
+    // Master Gain directly connects to destination for zero latency & pure unaltered audio
+    const masterGain = new Tone.Gain(1.0).toDestination();
     masterGainRef.current = masterGain;
-    vocalLimiterRef.current = vocalLimiter;
-    vocalCompressorRef.current = vocalCompressor;
 
-    // Create dedicated GainNodes per channel with direct pure signal path
-    const channelIds: StemChannelId[] = ['soprano', 'mezzoSoprano', 'contralto', 'tenor', 'baritone', 'bass', 'accompaniment'];
-    channelIds.forEach((id) => {
-      const dest = id === 'accompaniment' ? masterGain : vocalCompressor;
-      const initialGain = DEFAULT_CHANNELS[id].volume;
-      const gainNode = new Tone.Gain(initialGain).connect(dest);
-      const playerNode = new Tone.Player({ loop: false, autostart: false });
+    // Accompaniment track (Track 1)
+    const instGain = new Tone.Gain(DEFAULT_CHANNELS.accompaniment.volume).connect(masterGain);
+    const instPlayer = new Tone.Player({ loop: false, autostart: false });
+    instPlayer.connect(instGain);
+    channelGainsRef.current.accompaniment = instGain;
+    playersRef.current.accompaniment = instPlayer;
 
-      // Direct, uncolored connection: preserves 100% natural vocal harmonics, frequency body and maximum volume
-      playerNode.connect(gainNode);
-
-      channelGainsRef.current[id] = gainNode;
-      playersRef.current[id] = playerNode;
-    });
+    // Vocal track (Track 2) with direct clean routing (Zero latency & pure unaltered audio)
+    const vocalGain = new Tone.Gain(DEFAULT_CHANNELS.soprano.volume).connect(masterGain);
+    const vocalPlayer = new Tone.Player({ loop: false, autostart: false });
+    vocalPlayer.connect(vocalGain);
+    channelGainsRef.current.soprano = vocalGain;
+    playersRef.current.soprano = vocalPlayer;
   }, []);
 
   // Cleanup Web Audio Graph on unmount
@@ -156,50 +133,62 @@ export const useMultiStemMixer = (): UseMultiStemMixerReturn => {
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
       Object.values(playersRef.current).forEach((p) => p?.dispose());
       Object.values(channelGainsRef.current).forEach((g) => g?.dispose());
-      vocalCompressorRef.current?.dispose();
-      vocalLimiterRef.current?.dispose();
       masterGainRef.current?.dispose();
       pitchShiftRef.current?.dispose();
+      vocalPitchShiftRef.current?.dispose();
       pitchShiftRef.current = null;
+      vocalPitchShiftRef.current = null;
       masterGainRef.current = null;
-      vocalLimiterRef.current = null;
-      vocalCompressorRef.current = null;
     };
   }, []);
 
-  // Apply GainNode values exclusively.
-  // "Focar" (Solo): Boosts focused voice channel gain prominently (2.4x - 4x) while ducking accompaniment
+  // Apply GainNode values proportionally and cleanly (zero is strictly zero silence)
   const applyChannelGains = useCallback((chStates: Record<StemChannelId, StemChannelState>) => {
-    const soloActive = Object.values(chStates).some((ch) => ch.isSolo);
-    const boostMultiplier = focusBoostRef.current || 1.25;
+    const instGainNode = channelGainsRef.current.accompaniment;
+    const vocalGainNode = channelGainsRef.current.soprano;
 
-    Object.values(chStates).forEach((ch) => {
-      const gainNode = channelGainsRef.current[ch.id];
-      if (!gainNode) return;
+    const instCh = chStates.accompaniment;
+    // Find active vocal channel or default to soprano
+    const vocalCh = Object.values(chStates).find((c) => c.id !== 'accompaniment' && (c.volume > 0 || c.isSolo)) || chStates.soprano;
 
-      let targetGain = 0;
-      if (ch.isMuted) {
-        targetGain = 0;
-      } else if (soloActive) {
-        if (ch.isSolo) {
-          // Healthy, prominent volume boost: scales with channel fader, base 2.4x boost and user boost multiplier
-          const faderVol = ch.volume > 0 ? ch.volume : 0.9;
-          targetGain = Math.max(0.2, faderVol * 2.4 * boostMultiplier);
-        } else if (ch.id === 'accompaniment' && !ch.isMuted) {
-          // Duck accompaniment down to a quiet, soft background guide level (0.07-0.08)
-          // so singer has clear tempo and harmonic reference without ANY vocal masking
-          targetGain = Math.min(ch.volume * 0.1, 0.08);
-        } else {
-          // Silence all other non-focused vocal channels so the focused voice stands completely clear
-          targetGain = 0;
-        }
+    const anySolo = Object.values(chStates).some((c) => c.isSolo);
+
+    if (instGainNode) {
+      let instTarget = 0;
+      if (instCh.isMuted) {
+        instTarget = 0;
+      } else if (anySolo) {
+        instTarget = instCh.isSolo ? Math.max(0, instCh.volume) : 0;
       } else {
-        targetGain = ch.volume;
+        instTarget = Math.max(0, Math.min(1.0, instCh.volume));
       }
 
-      // Smooth ramp to avoid pops or volume jumps
-      gainNode.gain.rampTo(targetGain, 0.05);
-    });
+      try {
+        instGainNode.gain.cancelScheduledValues(Tone.now());
+        instGainNode.gain.rampTo(instTarget, 0.015);
+      } catch (e) {
+        instGainNode.gain.value = instTarget;
+      }
+    }
+
+    if (vocalGainNode) {
+      let vocalTarget = 0;
+      if (vocalCh.isMuted) {
+        vocalTarget = 0;
+      } else if (anySolo) {
+        vocalTarget = vocalCh.isSolo ? Math.max(0, vocalCh.volume) : 0;
+      } else {
+        // Vocal fader is clean and prominent (linear gain)
+        vocalTarget = Math.max(0, Math.min(1.5, vocalCh.volume));
+      }
+
+      try {
+        vocalGainNode.gain.cancelScheduledValues(Tone.now());
+        vocalGainNode.gain.rampTo(vocalTarget, 0.015);
+      } catch (e) {
+        vocalGainNode.gain.value = vocalTarget;
+      }
+    }
   }, []);
 
   const setFocusBoostMultiplier = useCallback(
@@ -220,18 +209,27 @@ export const useMultiStemMixer = (): UseMultiStemMixerReturn => {
     const boundedVal = Math.max(0, Math.min(1, val));
     setMasterVolumeState(boundedVal);
     if (masterGainRef.current) {
-      masterGainRef.current.gain.rampTo(boundedVal, 0.05);
+      masterGainRef.current.gain.rampTo(boundedVal, 0.015);
     }
   }, []);
 
-  // Set Channel Volume Fader (GainNode adjustment only)
+  // Set Channel Volume Fader (Direct proportional volume adjustment)
   const setChannelVolume = useCallback(
     (id: StemChannelId, volume: number) => {
       setChannels((prev) => {
         const next = {
           ...prev,
-          [id]: { ...prev[id], volume: Math.max(0, Math.min(1, volume)) }
+          [id]: { ...prev[id], volume: Math.max(0, Math.min(1.5, volume)) }
         };
+        // Also sync all vocal channels so active voice stays in sync
+        if (id !== 'accompaniment') {
+          const vocalIds: StemChannelId[] = ['soprano', 'contralto', 'tenor', 'bass', 'mezzoSoprano', 'baritone'];
+          vocalIds.forEach((vid) => {
+            if (next[vid]) {
+              next[vid] = { ...next[vid], volume: Math.max(0, Math.min(1.5, volume)) };
+            }
+          });
+        }
         applyChannelGains(next);
         return next;
       });
@@ -254,7 +252,7 @@ export const useMultiStemMixer = (): UseMultiStemMixerReturn => {
     [applyChannelGains]
   );
 
-  // Toggle Solo (Focar) - Isolates stem GainNode to 1.0/0.9 and silences all other GainNodes to 0.0
+  // Toggle Solo (S) - Isolates stem GainNode to its volume and silences other GainNodes
   const toggleSolo = useCallback(
     (id: StemChannelId) => {
       setChannels((prev) => {
@@ -269,28 +267,77 @@ export const useMultiStemMixer = (): UseMultiStemMixerReturn => {
     [applyChannelGains]
   );
 
+  const stop = useCallback(() => {
+    Object.values(playersRef.current).forEach((player) => player?.stop());
+    setIsPlaying(false);
+    setCurrentTime(0);
+    currentTimeRef.current = 0;
+    if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+  }, []);
+
   // Set Pitch Shift Semitones (-6 to +6)
-  // Bypasses Tone.PitchShift completely (wet = 0) when semitones === 0 to preserve 100% original pitch
+  // Sempre que alterar o tom: pausar a reprodução e recomeçar do início (0:00)
   const setPitchSemitones = useCallback((semitones: number) => {
+    stop();
     setPitchState(semitones);
-    if (pitchShiftRef.current) {
-      pitchShiftRef.current.pitch = semitones;
-      pitchShiftRef.current.wet.value = semitones === 0 ? 0 : 1;
+    if (!masterGainRef.current) return;
+
+    if (semitones === 0) {
+      // 0 ST: Disconnect pitchShift, pure direct connection to destination with ZERO delay
+      try {
+        masterGainRef.current.disconnect();
+        if (pitchShiftRef.current) {
+          pitchShiftRef.current.disconnect();
+        }
+      } catch (e) {}
+      masterGainRef.current.toDestination();
+    } else {
+      // Transposed: Connect through Tone.PitchShift
+      try {
+        masterGainRef.current.disconnect();
+        if (!pitchShiftRef.current) {
+          pitchShiftRef.current = new Tone.PitchShift({
+            pitch: semitones,
+            windowSize: 0.1
+          }).toDestination();
+        } else {
+          pitchShiftRef.current.pitch = semitones;
+          pitchShiftRef.current.toDestination();
+        }
+        masterGainRef.current.connect(pitchShiftRef.current);
+      } catch (e) {
+        console.warn('Pitch shift connection error:', e);
+      }
     }
+  }, []);
+
+  // Set Vocal Harmonic Shift (state tracker for tuner/evaluator with 100% direct zero-delay audio connection)
+  const setVocalHarmonicShift = useCallback((semitones: number) => {
+    activeHarmonicShiftRef.current = semitones;
+    const vocalPlayer = playersRef.current.soprano;
+    const vocalGain = channelGainsRef.current.soprano;
+
+    if (!vocalPlayer || !vocalGain) return;
+
+    try {
+      vocalPlayer.disconnect();
+    } catch (e) {}
+
+    // Direct clean connection: 100% pristine audio, zero delay, zero comb-filtering
+    vocalPlayer.connect(vocalGain);
   }, []);
 
   // Synchronized playback progress tracker
   const updateProgress = useCallback(() => {
-    const activePlayer = Object.values(playersRef.current).find(
-      (p) => p && p.state === 'started' && p.buffer && p.buffer.loaded
-    );
+    // Accompaniment is always the primary reference master clock
+    const masterPlayer = playersRef.current.accompaniment || playersRef.current.soprano;
 
-    if (activePlayer && activePlayer.buffer) {
-      const dur = activePlayer.buffer.duration || 1;
+    if (masterPlayer && masterPlayer.buffer && masterPlayer.state === 'started') {
+      const dur = masterPlayer.buffer.duration || 1;
       let rawTime = 0;
       try {
-        const startTime = (activePlayer as any)._startTime || 0;
-        rawTime = activePlayer.toSeconds(activePlayer.immediate()) - startTime;
+        const startTime = (masterPlayer as any)._startTime || 0;
+        rawTime = masterPlayer.toSeconds(masterPlayer.immediate()) - startTime;
       } catch (e) {
         rawTime = 0;
       }
@@ -317,18 +364,21 @@ export const useMultiStemMixer = (): UseMultiStemMixerReturn => {
   const loadStems = useCallback(async (options: MultiStemMixerOptions) => {
     try {
       ensureAudioGraph();
+      // Instantly stop all players before loading new stems to avoid any audio overlap
+      Object.values(playersRef.current).forEach((player) => {
+        try {
+          player?.stop();
+        } catch (e) {}
+      });
+      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+      setIsPlaying(false);
+
       setIsLoading(true);
       setError(null);
 
       const {
         vocalUrl,
-        accompanimentUrl,
-        sopranoUrl,
-        mezzoSopranoUrl,
-        contraltoUrl,
-        tenorUrl,
-        baritoneUrl,
-        bassUrl
+        accompanimentUrl
       } = options;
 
       const vUrl = typeof vocalUrl === 'string' ? vocalUrl : URL.createObjectURL(vocalUrl);
@@ -336,30 +386,18 @@ export const useMultiStemMixer = (): UseMultiStemMixerReturn => {
 
       const loadPromises: Promise<any>[] = [];
 
-      // Determine stem URL per voice channel or fallback to vocalUrl
-      const stemUrlMap: Record<StemChannelId, string> = {
-        soprano: sopranoUrl ? (typeof sopranoUrl === 'string' ? sopranoUrl : URL.createObjectURL(sopranoUrl)) : vUrl,
-        mezzoSoprano: mezzoSopranoUrl ? (typeof mezzoSopranoUrl === 'string' ? mezzoSopranoUrl : URL.createObjectURL(mezzoSopranoUrl)) : vUrl,
-        contralto: contraltoUrl ? (typeof contraltoUrl === 'string' ? contraltoUrl : URL.createObjectURL(contraltoUrl)) : vUrl,
-        tenor: tenorUrl ? (typeof tenorUrl === 'string' ? tenorUrl : URL.createObjectURL(tenorUrl)) : vUrl,
-        baritone: baritoneUrl ? (typeof baritoneUrl === 'string' ? baritoneUrl : URL.createObjectURL(baritoneUrl)) : vUrl,
-        bass: bassUrl ? (typeof bassUrl === 'string' ? bassUrl : URL.createObjectURL(bassUrl)) : vUrl,
-        accompaniment: aUrl
-      };
-
-      (Object.keys(stemUrlMap) as StemChannelId[]).forEach((id) => {
-        const player = playersRef.current[id];
-        if (player) {
-          loadPromises.push(player.load(stemUrlMap[id]));
-        }
-      });
+      if (playersRef.current.accompaniment) {
+        loadPromises.push(playersRef.current.accompaniment.load(aUrl));
+      }
+      if (playersRef.current.soprano) {
+        loadPromises.push(playersRef.current.soprano.load(vUrl));
+      }
 
       await Promise.all(loadPromises);
 
       const dur = playersRef.current.accompaniment?.buffer.duration || playersRef.current.soprano?.buffer.duration || 0;
       setDuration(dur);
       setCurrentTime(0);
-      setIsPlaying(false);
 
       // Re-apply channel gains so target gains are clean
       applyChannelGains(DEFAULT_CHANNELS);
@@ -370,20 +408,45 @@ export const useMultiStemMixer = (): UseMultiStemMixerReturn => {
     }
   }, [ensureAudioGraph, applyChannelGains]);
 
+  // Voice stem switching: loads the newly selected voice into Track 2 cleanly
+  const switchVocalStem = useCallback(
+    async (newVocalUrl: string | File | Blob) => {
+      try {
+        ensureAudioGraph();
+        const vocalPlayer = playersRef.current.soprano;
+        if (!vocalPlayer) return;
+
+        // 1. Immediately terminate playback of previous voice
+        try {
+          vocalPlayer.stop();
+        } catch (e) {}
+
+        // 2. Load the new voice stem into the vocal player
+        const vUrl = typeof newVocalUrl === 'string' ? newVocalUrl : URL.createObjectURL(newVocalUrl);
+        await vocalPlayer.load(vUrl);
+      } catch (err) {
+        console.warn('Erro ao trocar faixa do Cantor Virtual:', err);
+      }
+    },
+    [ensureAudioGraph]
+  );
+
   // Synchronized Playback Start
   const play = useCallback(async () => {
     ensureAudioGraph();
     await Tone.start();
-    const now = Tone.now();
     const rawOffset = Number(currentTimeRef.current);
     const offset = Number.isFinite(rawOffset) && rawOffset >= 0 ? rawOffset : 0;
 
-    // Start all loaded players at the exact same audio context time timestamp (sample-exact sync)
+    // Lookahead scheduling (40ms) guarantees that Web Audio hardware buffers are primed
+    // and both accompaniment and vocal start at the EXACT identical sample quantum!
+    const scheduleTime = Tone.now() + 0.04;
+
     Object.values(playersRef.current).forEach((player) => {
       if (player && player.loaded) {
         try {
-          (player as any)._startTime = now - offset;
-          player.start(now, offset);
+          (player as any)._startTime = scheduleTime - offset;
+          player.start(scheduleTime, offset);
         } catch (err) {
           console.warn('Tone.Player start error:', err);
         }
@@ -401,13 +464,6 @@ export const useMultiStemMixer = (): UseMultiStemMixerReturn => {
     if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
   }, []);
 
-  const stop = useCallback(() => {
-    Object.values(playersRef.current).forEach((player) => player?.stop());
-    setIsPlaying(false);
-    setCurrentTime(0);
-    currentTimeRef.current = 0;
-    if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
-  }, []);
 
   const seek = useCallback(
     (seconds: number) => {
@@ -426,10 +482,12 @@ export const useMultiStemMixer = (): UseMultiStemMixerReturn => {
 
   return {
     loadStems,
+    switchVocalStem,
     play,
     pause,
     stop,
     setPitchSemitones,
+    setVocalHarmonicShift,
     setChannelVolume,
     toggleMute,
     toggleSolo,

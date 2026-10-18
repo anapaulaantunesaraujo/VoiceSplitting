@@ -17,6 +17,7 @@ export interface UserVocalPracticeHistory {
 
 const FOLDER_NAME = 'Meu Treino Vocal';
 const APPDATA_HISTORY_FILE = 'vocal_practice_history.json';
+const REPERTOIRE_CATALOGUE_FILE = 'repertoire_catalogue.json';
 
 /**
  * Service to interact directly with Google Drive REST API v3
@@ -44,6 +45,9 @@ export class GoogleDriveService {
 
     const searchRes = await fetch(searchUrl, { headers: this.headers });
     if (!searchRes.ok) {
+      if (searchRes.status === 401) {
+        throw new Error('Sessão do Google expirada (401 Unauthorized). Faça login novamente.');
+      }
       throw new Error(`Erro ao buscar pasta no Google Drive: ${await searchRes.text()}`);
     }
 
@@ -201,6 +205,94 @@ export class GoogleDriveService {
 
     const searchRes = await fetch(searchUrl, { headers: this.headers });
     if (!searchRes.ok) return null;
+
+    const searchData = await searchRes.json();
+    if (!searchData.files || searchData.files.length === 0) return null;
+
+    const fileId = searchData.files[0].id;
+    const downloadUrl = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
+    const downloadRes = await fetch(downloadUrl, { headers: this.headers });
+
+    return await downloadRes.json();
+  }
+
+  /**
+   * Saves the complete repertoire catalogue (imported songs list, folders, and metadata)
+   * into the hidden appDataFolder in Google Drive, making it accessible on any device.
+   */
+  async saveCatalogueToAppData(catalogue: { songs: any[]; categories: any[]; lastUpdated?: string }): Promise<void> {
+    const payload = {
+      ...catalogue,
+      lastUpdated: catalogue.lastUpdated || new Date().toISOString()
+    };
+    const jsonBlob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+
+    const query = encodeURIComponent(`name = '${REPERTOIRE_CATALOGUE_FILE}' and 'appDataFolder' in parents and trashed = false`);
+    const searchUrl = `https://www.googleapis.com/drive/v3/files?q=${query}&spaces=appDataFolder&fields=files(id,name)`;
+
+    const searchRes = await fetch(searchUrl, { headers: this.headers });
+    let existingFileId: string | null = null;
+
+    if (!searchRes.ok) {
+      if (searchRes.status === 401) {
+        throw new Error('Sessão do Google expirada (401 Unauthorized). Faça login novamente.');
+      }
+    } else {
+      const searchData = await searchRes.json();
+      if (searchData.files && searchData.files.length > 0) {
+        existingFileId = searchData.files[0].id;
+      }
+    }
+
+    if (existingFileId) {
+      const updateUrl = `https://www.googleapis.com/upload/drive/v3/files/${existingFileId}?uploadType=media`;
+      const updateRes = await fetch(updateUrl, {
+        method: 'PATCH',
+        headers: {
+          ...this.headers,
+          'Content-Type': 'application/json'
+        },
+        body: jsonBlob
+      });
+      if (!updateRes.ok) {
+        throw new Error(`Erro ao atualizar catálogo no Google Drive: ${await updateRes.text()}`);
+      }
+    } else {
+      const metadata = {
+        name: REPERTOIRE_CATALOGUE_FILE,
+        parents: ['appDataFolder']
+      };
+      const formData = new FormData();
+      formData.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+      formData.append('file', jsonBlob);
+
+      const createUrl = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&spaces=appDataFolder';
+      const createRes = await fetch(createUrl, {
+        method: 'POST',
+        headers: this.headers,
+        body: formData
+      });
+      if (!createRes.ok) {
+        throw new Error(`Erro ao salvar catálogo no Google Drive: ${await createRes.text()}`);
+      }
+    }
+  }
+
+  /**
+   * Loads the repertoire catalogue (songs and categories) from Google Drive appDataFolder.
+   * This is how a new phone or computer retrieves all user songs upon logging in!
+   */
+  async loadCatalogueFromAppData(): Promise<{ songs: any[]; categories: any[]; lastUpdated: string } | null> {
+    const query = encodeURIComponent(`name = '${REPERTOIRE_CATALOGUE_FILE}' and 'appDataFolder' in parents and trashed = false`);
+    const searchUrl = `https://www.googleapis.com/drive/v3/files?q=${query}&spaces=appDataFolder&fields=files(id,name)`;
+
+    const searchRes = await fetch(searchUrl, { headers: this.headers });
+    if (!searchRes.ok) {
+      if (searchRes.status === 401) {
+        throw new Error('Sessão do Google expirada (401 Unauthorized). Faça login novamente.');
+      }
+      return null;
+    }
 
     const searchData = await searchRes.json();
     if (!searchData.files || searchData.files.length === 0) return null;

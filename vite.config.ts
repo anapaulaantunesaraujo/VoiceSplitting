@@ -11,9 +11,9 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg', 'pwa-192x192.png', 'pwa-512x512.png'],
       manifest: {
-        name: 'VoiceSplitting PWA',
-        short_name: 'VoiceSplit',
-        description: 'Aplicativo PWA completo para separação e processamento de áudio com suporte offline',
+        name: 'Divisão Vocal',
+        short_name: 'Divisão Vocal',
+        description: 'Divisão Vocal - Aplicativo para separação de vozes e treino de afinação com IA',
         theme_color: '#0f172a',
         background_color: '#0f172a',
         display: 'standalone',
@@ -46,8 +46,18 @@ export default defineConfig({
   ],
   server: {
     headers: {
-      'Cross-Origin-Opener-Policy': 'same-origin',
+      'Cross-Origin-Opener-Policy': 'same-origin-allow-popups',
       'Cross-Origin-Embedder-Policy': 'require-corp'
+    },
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8000',
+        changeOrigin: true
+      },
+      '/health': {
+        target: 'http://localhost:8000',
+        changeOrigin: true
+      }
     }
   },
   optimizeDeps: {

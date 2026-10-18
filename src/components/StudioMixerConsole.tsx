@@ -76,7 +76,7 @@ export const StudioMixerConsole: React.FC<StudioMixerConsoleProps> = ({
           </button>
           <div>
             <h2 className="text-xl font-extrabold text-white tracking-tight flex items-center gap-2">
-              🎛️ Mesa de Som (Treino Vocal)
+              🎛️ Mesa de Som (Divisão Vocal)
             </h2>
             <p className="text-xs text-[#a3a3a3] font-medium">
               Controle de canais isolados, botões Focar / Silenciar e Afinador Integrado

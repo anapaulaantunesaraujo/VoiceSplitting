@@ -45,7 +45,7 @@ export const RepertoireView: React.FC<RepertoireViewProps> = ({
             <span>📚</span> Meu Repertório
           </h1>
           <p className="text-xs text-[#a3a3a3] mt-1 font-medium">
-            Gerencie suas músicas por categoria e abra diretamente no Mixer do Treino Vocal
+            Gerencie suas músicas por categoria e abra diretamente no Mixer do Divisão Vocal
           </p>
         </div>
 
@@ -60,8 +60,11 @@ export const RepertoireView: React.FC<RepertoireViewProps> = ({
             📤 Importar Áudio / Vídeo
             <input
               type="file"
-              accept="audio/*,video/*"
+              accept="audio/*,video/*,.mp3,.wav,.m4a,.aac,.ogg,.flac,.webm,.mp4,.caf,.wma,.m4v,.mov"
               className="hidden"
+              onClick={(e) => {
+                (e.target as HTMLInputElement).value = '';
+              }}
               onChange={(e) => {
                 if (e.target.files && e.target.files[0]) {
                   onUploadFile(e.target.files[0]);
@@ -201,7 +204,7 @@ export const RepertoireView: React.FC<RepertoireViewProps> = ({
           >
             <h3 className="text-lg font-bold text-white mb-2">📁 Criar Nova Pasta no Repertório</h3>
             <p className="text-xs text-[#a3a3a3]">
-              Organize seus exercícios de afinação e apresentações no Treino Vocal.
+              Organize suas músicas e apresentações no Divisão Vocal.
             </p>
 
             <input

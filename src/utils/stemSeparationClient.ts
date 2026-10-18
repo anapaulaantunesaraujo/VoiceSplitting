@@ -14,12 +14,21 @@ export interface RunWorkerStemSeparationResult {
   accompanimentAudioBuffer: AudioBuffer;
   vocalBlobUrl: string;
   accompanimentBlobUrl: string;
+  musicalAnalysis?: {
+    key: string;
+    rootNote: string;
+    mode: 'Major' | 'Minor';
+    bpm: number;
+    duration?: number;
+    scaleNotes?: string[];
+    confidence?: number;
+  };
 }
 
 /**
  * Encodes an AudioBuffer into an uncompressed WAV Blob
  */
-function audioBufferToWavBlob(buffer: AudioBuffer): Blob {
+export function audioBufferToWavBlob(buffer: AudioBuffer): Blob {
   const numChannels = buffer.numberOfChannels;
   const sampleRate = buffer.sampleRate;
   const format = 1; // PCM

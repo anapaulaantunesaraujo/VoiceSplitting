@@ -9,6 +9,7 @@ export interface UserProfile {
 }
 
 interface GoogleLoginButtonProps {
+  userProfile?: UserProfile | null;
   onLoginSuccess: (user: UserProfile) => void;
   onLogout?: () => void;
   onClickBeforeLogin?: () => void;
@@ -16,15 +17,17 @@ interface GoogleLoginButtonProps {
 }
 
 export const GoogleLoginButton: React.FC<GoogleLoginButtonProps> = ({
+  userProfile,
   onLoginSuccess,
   onLogout,
   onClickBeforeLogin,
   variant = 'header'
 }) => {
-  const [user, setUser] = useState<UserProfile | null>(() => {
+  const [internalUser, setInternalUser] = useState<UserProfile | null>(() => {
     const saved = localStorage.getItem('voicesplit_user_profile');
     return saved ? JSON.parse(saved) : null;
   });
+  const user = userProfile !== undefined ? userProfile : internalUser;
   const [isLoggingIn, setIsLoggingIn] = useState<boolean>(false);
 
   const [showHelperModal, setShowHelperModal] = useState<boolean>(false);
@@ -55,7 +58,7 @@ export const GoogleLoginButton: React.FC<GoogleLoginButtonProps> = ({
           accessToken
         };
 
-        setUser(profile);
+        setInternalUser(profile);
         localStorage.setItem('voicesplit_user_profile', JSON.stringify(profile));
         setShowHelperModal(false);
         onLoginSuccess(profile);
@@ -81,9 +84,22 @@ export const GoogleLoginButton: React.FC<GoogleLoginButtonProps> = ({
   });
 
   const handleLogout = () => {
-    setUser(null);
+    setInternalUser(null);
     localStorage.removeItem('voicesplit_user_profile');
     if (onLogout) onLogout();
+  };
+
+  const handleDemoLogin = () => {
+    const demoProfile: UserProfile = {
+      name: 'Ana Paula (Modo Local/Drive)',
+      email: 'anapaula.vocal@gmail.com',
+      picture: '',
+      accessToken: 'demo_token_local'
+    };
+    setInternalUser(demoProfile);
+    localStorage.setItem('voicesplit_user_profile', JSON.stringify(demoProfile));
+    setShowHelperModal(false);
+    onLoginSuccess(demoProfile);
   };
 
   const handleClick = () => {
@@ -189,9 +205,9 @@ export const GoogleLoginButton: React.FC<GoogleLoginButtonProps> = ({
           <button
             onClick={handleClick}
             disabled={isLoggingIn}
-            className="px-4 py-3 bg-[#121212] hover:bg-[#1e1e1e] active:bg-[#262626] text-white border border-[#2e2e2e] rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-2.5 cursor-pointer disabled:opacity-50"
+            className="px-6 py-3.5 bg-[#121212] hover:bg-[#1e1e1e] active:bg-[#262626] text-white border border-[#2e2e2e] rounded-2xl text-xs sm:text-sm font-bold transition-all shadow-md flex items-center justify-center gap-3 cursor-pointer disabled:opacity-50 min-w-[175px] shrink-0"
           >
-            <svg width="16" height="16" viewBox="0 0 24 24">
+            <svg width="18" height="18" viewBox="0 0 24 24">
               <path
                 fill="#4285F4"
                 d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -209,7 +225,7 @@ export const GoogleLoginButton: React.FC<GoogleLoginButtonProps> = ({
                 d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
               />
             </svg>
-            <span>{isLoggingIn ? 'Conectando...' : 'Google Drive Sync'}</span>
+            <span className="px-1.5 font-bold">{isLoggingIn ? 'Conectando...' : 'Google Drive Sync'}</span>
           </button>
 
           <button
@@ -293,11 +309,21 @@ export const GoogleLoginButton: React.FC<GoogleLoginButtonProps> = ({
               </li>
             </ol>
 
-            <div className="flex items-center justify-end gap-3 pt-2 border-t border-[#2e2e2e]">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-[#2e2e2e]">
+              <button
+                type="button"
+                onClick={handleDemoLogin}
+                className="w-full sm:w-auto px-4 py-2.5 bg-[#00c2cb]/15 hover:bg-[#00c2cb]/25 text-[#00c2cb] border border-[#00c2cb]/40 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2"
+                title="Entrar imediatamente para testar todas as funções sem precisar configurar o Google Cloud"
+              >
+                <span>🧪</span>
+                <span>Continuar no Modo Teste (Sem Google Cloud)</span>
+              </button>
+
               <button
                 type="button"
                 onClick={() => setShowHelperModal(false)}
-                className="px-5 py-2.5 bg-[#262626] hover:bg-[#333333] text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                className="w-full sm:w-auto px-5 py-2.5 bg-[#262626] hover:bg-[#333333] text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
               >
                 Entendido / Fechar
               </button>
