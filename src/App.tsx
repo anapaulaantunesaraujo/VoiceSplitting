@@ -6,7 +6,7 @@ import { GoogleLoginButton, UserProfile } from './components/GoogleLoginButton';
 const MainApp = lazy(() => import('./MainApp'));
 
 export const App: React.FC = () => {
-  const [, setUserProfile] = useState<UserProfile | null>(() => {
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(() => {
     const saved = localStorage.getItem('voicesplit_user_profile');
     return saved ? JSON.parse(saved) : null;
   });
@@ -96,7 +96,7 @@ export const App: React.FC = () => {
                 Que bom ter você de volta
               </h3>
               <p className="text-sm sm:text-base text-[#71717a] leading-relaxed max-w-sm mx-auto">
-                Acesse seu repertório e ferramentas de ensaio
+                Acesse seu repertório e ferramentas de ensaio sincronizadas com seu Google Drive
               </p>
             </div>
 
@@ -104,32 +104,20 @@ export const App: React.FC = () => {
             <div className="w-full flex flex-col items-center gap-5 pt-2">
               <GoogleLoginButton
                 variant="pill"
+                userProfile={userProfile}
                 onLoginSuccess={(user) => {
                   setUserProfile(user);
                   iniciarMotorDeAudio();
                 }}
+                onContinue={iniciarMotorDeAudio}
                 onLogout={() => setUserProfile(null)}
               />
 
-              {/* Separador Visual */}
-              <div className="w-full flex items-center gap-4 my-2">
-                <div className="flex-1 h-px bg-[#232530]" />
-                <span className="text-xs uppercase tracking-wider text-[#71717a] font-bold">ou</span>
-                <div className="flex-1 h-px bg-[#232530]" />
-              </div>
-
-              {/* Modo Local (Continuar sem login) */}
-              <button
-                onClick={iniciarMotorDeAudio}
-                className="w-full py-4 px-6 bg-[#181a20] hover:bg-[#20222a] active:bg-[#262933] text-white border border-[#272b38] rounded-2xl text-xs sm:text-sm font-black transition-all shadow-md flex items-center justify-center gap-3 cursor-pointer min-h-[52px]"
-              >
-                <span className="text-lg">🎧</span>
-                <span>Continuar no Modo Local (Offline)</span>
-              </button>
-
-              <p className="text-xs text-[#71717a] leading-relaxed pt-3 max-w-xs mx-auto">
-                Suas músicas são salvas no navegador (IndexedDB) e sincronizadas com seu Google Drive quando conectado.
-              </p>
+              {!userProfile && (
+                <p className="text-xs text-[#71717a] leading-relaxed pt-2 max-w-xs mx-auto">
+                  Sincronização automática em nuvem: suas músicas e divisões de vozes são salvas diretamente no seu Google Drive.
+                </p>
+              )}
             </div>
           </div>
         </div>

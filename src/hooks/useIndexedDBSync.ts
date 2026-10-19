@@ -832,6 +832,63 @@ export const useIndexedDBSync = (userProfile: UserProfile | null): UseIndexedDBS
         }
       }
 
+      // Step E: Escanear arquivos de áudio colocados diretamente na pasta "Meu Treino Vocal" no Google Drive
+      setSyncStatusLog('📥 Verificando músicas na sua pasta do Google Drive...');
+      try {
+        const driveFiles = await driveService.listTrainingFiles(folderId);
+        let newSongsFound = false;
+        const currentSongs = (await repertoireStore.getItem<RepertoireSong[]>('songs')) || mergedSongs;
+        let updatedSongs = [...currentSongs];
+
+        for (const file of driveFiles) {
+          // Ignora faixas internas do cantor virtual / stems gerados pelo app
+          const isStem = /^\[(VOCAL|INSTRUMENTAL|SOPRANO|CONTRALTO|TENOR|BAIXO|AI_OVERLAY)\]/i.test(file.name);
+          if (isStem) continue;
+
+          // Ignora backups json e diretórios
+          if (file.name.endsWith('.json') || file.mimeType === 'application/json' || file.mimeType === 'application/vnd.google-apps.folder') {
+            continue;
+          }
+
+          const cleanTitle = normalizeSongTitle(file.name) || file.name;
+          const normTitleLower = cleanTitle.toLowerCase();
+
+          // Verifica se já está catalogado por driveOriginalId ou pelo título/arquivo
+          const alreadyExists = updatedSongs.some(
+            (s) =>
+              s.driveOriginalId === file.id ||
+              normalizeSongTitle(s.title).toLowerCase() === normTitleLower ||
+              normalizeSongTitle(s.fileName || '').toLowerCase() === normTitleLower
+          );
+
+          if (!alreadyExists) {
+            const newDriveSong: RepertoireSong = {
+              id: `drive_${file.id}`,
+              title: cleanTitle,
+              fileName: file.name,
+              category: 'ensaios',
+              createdAt: file.createdTime || new Date().toISOString(),
+              driveOriginalId: file.id,
+              isSeparated: false
+            };
+            updatedSongs.unshift(newDriveSong);
+            newSongsFound = true;
+          }
+        }
+
+        if (newSongsFound) {
+          await repertoireStore.setItem('songs', updatedSongs);
+          setSongs(updatedSongs);
+          await driveService.saveCatalogueToAppData({
+            songs: updatedSongs,
+            categories: mergedCats,
+            lastUpdated: new Date().toISOString()
+          });
+        }
+      } catch (listErr) {
+        console.warn('Erro ao escanear arquivos da pasta do Drive:', listErr);
+      }
+
       // Refresh local audios list
       const audios: OfflineAudioRecord[] = [];
       await offlineAudioStore.iterate<OfflineAudioRecord, void>((val) => audios.push(val));
@@ -945,6 +1002,13 @@ export const useIndexedDBSync = (userProfile: UserProfile | null): UseIndexedDBS
       window.removeEventListener('online', handleOnlineEvent);
     };
   }, [userProfile, triggerBackgroundSync]);
+
+  // 7. Sincronização automática assim que o perfil de usuário estiver autenticado
+  useEffect(() => {
+    if (userProfile && userProfile.accessToken && navigator.onLine) {
+      triggerBackgroundSync(userProfile);
+    }
+  }, [userProfile?.accessToken, triggerBackgroundSync]);
 
   return {
     practiceHistory,

@@ -13,6 +13,7 @@ interface GoogleLoginButtonProps {
   onLoginSuccess: (user: UserProfile) => void;
   onLogout?: () => void;
   onClickBeforeLogin?: () => void;
+  onContinue?: () => void;
   variant?: 'pill' | 'header';
 }
 
@@ -21,6 +22,7 @@ export const GoogleLoginButton: React.FC<GoogleLoginButtonProps> = ({
   onLoginSuccess,
   onLogout,
   onClickBeforeLogin,
+  onContinue,
   variant = 'header'
 }) => {
   const [internalUser, setInternalUser] = useState<UserProfile | null>(() => {
@@ -131,6 +133,60 @@ export const GoogleLoginButton: React.FC<GoogleLoginButtonProps> = ({
   };
 
   if (user) {
+    if (variant === 'pill') {
+      const firstName = user.name ? user.name.split(' ')[0] : 'Usuário';
+      return (
+        <div className="w-full max-w-sm flex flex-col items-center gap-4">
+          {/* Card com Informações da Conta Conectada */}
+          <div className="w-full bg-[#181a24] border border-[#272b3a] rounded-2xl p-4 flex items-center justify-between gap-3 shadow-lg">
+            <div className="flex items-center gap-3 truncate">
+              {user.picture ? (
+                <img
+                  src={user.picture}
+                  alt={user.name}
+                  className="w-12 h-12 rounded-full object-cover border-2 border-[#00c2cb] shrink-0"
+                />
+              ) : (
+                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#00c2cb] to-[#2563eb] text-white font-black flex items-center justify-center shrink-0 text-lg shadow">
+                  {user.name ? user.name.charAt(0).toUpperCase() : 'U'}
+                </div>
+              )}
+              <div className="text-left truncate">
+                <p className="text-sm font-bold text-white leading-tight truncate">{user.name}</p>
+                <p className="text-xs text-[#00c2cb] font-semibold flex items-center gap-1.5 pt-1 truncate">
+                  <span>☁️</span> Google Drive Conectado
+                </p>
+                {user.email && (
+                  <p className="text-[11px] text-[#71717a] truncate pt-0.5">{user.email}</p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Botão de Ação Principal: Entrar / Continuar */}
+          <button
+            onClick={() => {
+              if (onContinue) onContinue();
+              else onLoginSuccess(user);
+            }}
+            className="w-full py-4 px-6 bg-gradient-to-r from-[#00c2cb] to-[#0ea5e9] hover:from-[#38e1e9] hover:to-[#38bdf8] active:scale-[0.99] text-black rounded-2xl text-base font-black transition-all shadow-xl shadow-cyan-950/40 flex items-center justify-center gap-3 cursor-pointer min-h-[54px]"
+          >
+            <span className="text-xl">▶️</span>
+            <span>Continuar como {firstName}</span>
+          </button>
+
+          {/* Botão Secundário: Trocar de conta */}
+          <button
+            onClick={handleLogout}
+            className="text-xs text-[#9ca3af] hover:text-rose-400 font-semibold transition-colors cursor-pointer py-1 flex items-center gap-1.5"
+          >
+            <span>Desconectar / Entrar com outra conta</span>
+          </button>
+        </div>
+      );
+    }
+
+    /* Header Compact Variant */
     return (
       <div className="flex items-center justify-between gap-3 bg-[#121212] border border-[#2e2e2e] px-4 py-2.5 rounded-xl shadow-md">
         <div className="flex items-center gap-3 truncate">
