@@ -840,16 +840,27 @@ export const useIndexedDBSync = (userProfile: UserProfile | null): UseIndexedDBS
       setSyncStatusLog('✅ Galeria do Google Drive sincronizada com sucesso em todos os seus aparelhos!');
     } catch (err: any) {
       console.warn('Erro na sincronização em segundo plano:', err);
+      const errMsg = err?.message || '';
       const isAuthError =
-        err?.message?.includes('401') ||
-        err?.message?.includes('Unauthorized') ||
-        err?.message?.includes('invalid_token') ||
-        err?.message?.includes('invalid_grant');
+        errMsg.includes('401') ||
+        errMsg.includes('Unauthorized') ||
+        errMsg.includes('invalid_token') ||
+        errMsg.includes('invalid_grant');
+
+      const isDriveApiDisabled =
+        errMsg.includes('Google Drive API has not been used') ||
+        errMsg.includes('is disabled') ||
+        errMsg.includes('API do Google Drive está desativada') ||
+        errMsg.includes('SERVICE_DISABLED') ||
+        errMsg.includes('accessNotConfigured');
 
       if (isAuthError) {
         setSyncStatusLog('⚠️ Sessão do Google expirada. Clique no botão de Drive para reconectar sua conta.');
+      } else if (isDriveApiDisabled) {
+        setSyncStatusLog('⚠️ A API do Google Drive está desativada no seu Google Cloud. Ative em: https://console.developers.google.com/apis/api/drive.googleapis.com/overview?project=1002258145056');
       } else {
-        setSyncStatusLog(`⚠️ Sincronização Google Drive: ${err?.message || 'Falha ao sincronizar com o Drive.'}`);
+        const cleanMsg = errMsg.length > 150 ? errMsg.slice(0, 150) + '...' : errMsg;
+        setSyncStatusLog(`⚠️ Sincronização Google Drive: ${cleanMsg || 'Falha ao sincronizar com o Drive.'}`);
       }
     } finally {
       setIsSyncing(false);

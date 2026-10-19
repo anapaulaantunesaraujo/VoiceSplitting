@@ -188,14 +188,32 @@ export const GoogleSyncModal: React.FC<GoogleSyncModalProps> = ({
 
           {/* Status feedback box */}
           {syncStatusLog && (
-            <div className="px-4 py-3 rounded-2xl bg-[#14161f] border border-[#272b38] text-xs text-[#cbd5e1] flex items-center gap-3 shadow-inner">
-              <span className="text-base shrink-0">{isSyncing ? '🔄' : '☁️'}</span>
-              <span className="font-medium leading-relaxed">{syncStatusLog}</span>
+            <div className={`p-4 rounded-2xl border text-xs flex flex-col gap-2.5 shadow-inner ${
+              syncStatusLog.includes('⚠️')
+                ? 'bg-amber-950/20 border-amber-500/30 text-amber-200'
+                : 'bg-[#14161f] border-[#272b38] text-[#cbd5e1]'
+            }`}>
+              <div className="flex items-center gap-3">
+                <span className="text-base shrink-0">{isSyncing ? '🔄' : syncStatusLog.includes('⚠️') ? '⚠️' : '☁️'}</span>
+                <span className="font-medium leading-relaxed break-words">{syncStatusLog}</span>
+              </div>
+              {syncStatusLog.includes('https://') && (
+                <div className="pt-1">
+                  <a
+                    href={syncStatusLog.match(/https:\/\/[^\s]+/)?.[0] || 'https://console.developers.google.com/apis/api/drive.googleapis.com/overview?project=1002258145056'}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 px-3.5 py-2 bg-[#00c2cb] hover:bg-[#00adb5] text-black font-black text-xs rounded-xl transition-all cursor-pointer shadow-sm"
+                  >
+                    <span>🔗 Ativar Google Drive API no Console</span>
+                  </a>
+                </div>
+              )}
             </div>
           )}
         </div>
 
-        {/* Section 3: Troubleshooting helper for Google OAuth (origin_mismatch) */}
+        {/* Section 3: Troubleshooting helper for Google OAuth (origin_mismatch and Drive API) */}
         <div className="border-t border-[#232530] pt-4">
           <button
             type="button"
@@ -204,35 +222,49 @@ export const GoogleSyncModal: React.FC<GoogleSyncModalProps> = ({
           >
             <span className="flex items-center gap-2">
               <span>🔧</span>
-              <span>Dificuldades para conectar? (Configuração Google OAuth)</span>
+              <span>Dificuldades para sincronizar? (Configurações Google Cloud)</span>
             </span>
             <span>{showTroubleshooting ? '▲' : '▼'}</span>
           </button>
 
           {showTroubleshooting && (
-            <div className="mt-3 p-4 bg-[#14161f] border border-[#272b38] rounded-2xl space-y-3 text-xs text-[#a3a3a3]">
-              <p className="leading-relaxed">
-                Caso veja a mensagem de <strong className="text-white">"origin_mismatch" (Erro 400)</strong>, o Google precisa que sua URL atual esteja registrada nas <em>Origens JavaScript autorizadas</em> do seu ID de Cliente no Google Cloud.
-              </p>
-
-              <div className="bg-[#1c1f2b] p-3 rounded-xl border border-[#272b38] flex items-center justify-between gap-3">
-                <code className="text-[#00c2cb] font-mono select-all truncate text-[11px]">
-                  {currentOrigin || window.location.origin}
-                </code>
-                <button
-                  type="button"
-                  onClick={copyOriginToClipboard}
-                  className="px-3 py-1.5 bg-[#00c2cb] hover:bg-[#00adb5] text-black font-black text-xs rounded-lg transition-colors cursor-pointer shrink-0"
+            <div className="mt-3 p-4 bg-[#14161f] border border-[#272b38] rounded-2xl space-y-4 text-xs text-[#a3a3a3]">
+              {/* Item A: Google Drive API */}
+              <div className="space-y-1.5 pb-2 border-b border-[#232530]">
+                <span className="font-bold text-white block">1. Ativar a API do Google Drive (Essencial):</span>
+                <p className="leading-relaxed text-[#9ca3af] text-[11px]">
+                  Para salvar suas músicas e histórico na nuvem, o projeto no Google Cloud precisa estar com a API do Drive ativada:
+                </p>
+                <a
+                  href="https://console.developers.google.com/apis/api/drive.googleapis.com/overview?project=1002258145056"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-[#00c2cb] hover:underline font-bold text-[11px] pt-0.5"
                 >
-                  {copiedOrigin ? '✓ Copiado!' : 'Copiar URL'}
-                </button>
+                  <span>🔗 Ativar Google Drive API no Projeto 1002258145056</span>
+                </a>
               </div>
 
-              <ol className="list-decimal list-inside space-y-1 text-[11px] leading-relaxed text-[#9ca3af]">
-                <li>Acesse o <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noreferrer" className="text-[#00c2cb] underline">Google Cloud Console (Credenciais)</a></li>
-                <li>Clique no seu ID de cliente OAuth 2.0 Web.</li>
-                <li>Em <strong>Origens JavaScript autorizadas</strong>, adicione a URL copiada acima e clique em <strong>Salvar</strong>.</li>
-              </ol>
+              {/* Item B: Origin Mismatch */}
+              <div className="space-y-1.5">
+                <span className="font-bold text-white block">2. Origem do Domínio (origin_mismatch / Erro 400):</span>
+                <p className="leading-relaxed text-[11px]">
+                  Caso veja a mensagem de <strong className="text-white">"origin_mismatch"</strong>, registre o domínio abaixo nas <em>Origens JavaScript autorizadas</em>:
+                </p>
+
+                <div className="bg-[#1c1f2b] p-3 rounded-xl border border-[#272b38] flex items-center justify-between gap-3">
+                  <code className="text-[#00c2cb] font-mono select-all truncate text-[11px]">
+                    {currentOrigin || window.location.origin}
+                  </code>
+                  <button
+                    type="button"
+                    onClick={copyOriginToClipboard}
+                    className="px-3 py-1.5 bg-[#00c2cb] hover:bg-[#00adb5] text-black font-black text-xs rounded-lg transition-colors cursor-pointer shrink-0"
+                  >
+                    {copiedOrigin ? '✓ Copiado!' : 'Copiar URL'}
+                  </button>
+                </div>
+              </div>
             </div>
           )}
         </div>

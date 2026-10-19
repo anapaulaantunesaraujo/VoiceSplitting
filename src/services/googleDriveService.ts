@@ -37,6 +37,37 @@ export class GoogleDriveService {
   }
 
   /**
+   * Helper unificado para tratar erros da API do Google com links diretos de ativação
+   */
+  private async handleApiError(res: Response, defaultMessage: string): Promise<never> {
+    if (res.status === 401) {
+      throw new Error('Sessão do Google expirada (401 Unauthorized). Faça login novamente.');
+    }
+    const errText = await res.text();
+    try {
+      const errJson = JSON.parse(errText);
+      const msg = errJson?.error?.message || '';
+      if (
+        res.status === 403 &&
+        (msg.includes('Google Drive API has not been used') ||
+          msg.includes('is disabled') ||
+          errText.includes('SERVICE_DISABLED') ||
+          errText.includes('accessNotConfigured'))
+      ) {
+        const match = errText.match(/https:\/\/console\.developers\.google\.com[^\s",]+/);
+        const url = match ? match[0] : 'https://console.developers.google.com/apis/api/drive.googleapis.com/overview?project=1002258145056';
+        throw new Error(`A API do Google Drive está desativada no seu Google Cloud. Ative em: ${url}`);
+      }
+      if (errJson?.error?.message) {
+        throw new Error(`${defaultMessage}: ${errJson.error.message}`);
+      }
+    } catch (parseErr: any) {
+      if (parseErr.message && parseErr.message.includes('API do Google Drive')) throw parseErr;
+    }
+    throw new Error(`${defaultMessage}: ${errText.slice(0, 180)}`);
+  }
+
+  /**
    * Searches for the 'Meu Treino Vocal' folder or creates it if it doesn't exist.
    */
   async getOrCreateTrainingFolder(): Promise<string> {
@@ -45,10 +76,7 @@ export class GoogleDriveService {
 
     const searchRes = await fetch(searchUrl, { headers: this.headers });
     if (!searchRes.ok) {
-      if (searchRes.status === 401) {
-        throw new Error('Sessão do Google expirada (401 Unauthorized). Faça login novamente.');
-      }
-      throw new Error(`Erro ao buscar pasta no Google Drive: ${await searchRes.text()}`);
+      await this.handleApiError(searchRes, 'Erro ao buscar pasta no Google Drive');
     }
 
     const searchData = await searchRes.json();
@@ -234,9 +262,7 @@ export class GoogleDriveService {
     let existingFileId: string | null = null;
 
     if (!searchRes.ok) {
-      if (searchRes.status === 401) {
-        throw new Error('Sessão do Google expirada (401 Unauthorized). Faça login novamente.');
-      }
+      await this.handleApiError(searchRes, 'Erro ao consultar catálogo no Google Drive');
     } else {
       const searchData = await searchRes.json();
       if (searchData.files && searchData.files.length > 0) {
@@ -255,7 +281,7 @@ export class GoogleDriveService {
         body: jsonBlob
       });
       if (!updateRes.ok) {
-        throw new Error(`Erro ao atualizar catálogo no Google Drive: ${await updateRes.text()}`);
+        await this.handleApiError(updateRes, 'Erro ao atualizar catálogo no Google Drive');
       }
     } else {
       const metadata = {
@@ -273,7 +299,7 @@ export class GoogleDriveService {
         body: formData
       });
       if (!createRes.ok) {
-        throw new Error(`Erro ao salvar catálogo no Google Drive: ${await createRes.text()}`);
+        await this.handleApiError(createRes, 'Erro ao salvar catálogo no Google Drive');
       }
     }
   }
@@ -288,8 +314,8 @@ export class GoogleDriveService {
 
     const searchRes = await fetch(searchUrl, { headers: this.headers });
     if (!searchRes.ok) {
-      if (searchRes.status === 401) {
-        throw new Error('Sessão do Google expirada (401 Unauthorized). Faça login novamente.');
+      if (searchRes.status === 401 || searchRes.status === 403) {
+        await this.handleApiError(searchRes, 'Erro ao carregar catálogo do Google Drive');
       }
       return null;
     }

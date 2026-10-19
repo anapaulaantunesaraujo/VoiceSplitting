@@ -438,15 +438,30 @@ export const MoisesRepertoireView: React.FC<MoisesRepertoireViewProps> = ({
         {syncStatusLog && (
           <div
             onClick={onOpenSyncModal}
-            className="px-5 py-3 rounded-2xl bg-[#14161f] border border-[#272b38] hover:border-[#00c2cb]/40 transition-colors text-xs text-[#9ca3af] flex items-center justify-between gap-3 shadow-inner cursor-pointer"
+            className={`px-5 py-3 rounded-2xl border transition-colors text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-inner cursor-pointer ${
+              syncStatusLog.includes('⚠️')
+                ? 'bg-amber-950/20 border-amber-500/30 text-amber-200 hover:border-amber-500/50'
+                : 'bg-[#14161f] border-[#272b38] hover:border-[#00c2cb]/40 text-[#9ca3af]'
+            }`}
             title="Clique para ver detalhes da sincronização"
           >
-            <div className="flex items-center gap-2.5">
-              <span>{isSyncing ? '🔄' : '☁️'}</span>
-              <span className="font-medium text-white">{syncStatusLog}</span>
+            <div className="flex items-center gap-2.5 flex-1 flex-wrap">
+              <span className="text-sm shrink-0">{isSyncing ? '🔄' : syncStatusLog.includes('⚠️') ? '⚠️' : '☁️'}</span>
+              <span className="font-medium text-white break-words">{syncStatusLog}</span>
+              {syncStatusLog.includes('https://') && (
+                <a
+                  href={syncStatusLog.match(/https:\/\/[^\s]+/)?.[0] || 'https://console.developers.google.com/apis/api/drive.googleapis.com/overview?project=1002258145056'}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="inline-flex items-center gap-1.5 px-3 py-1 bg-[#00c2cb] hover:bg-[#00adb5] text-black font-black text-xs rounded-xl transition-all cursor-pointer shadow-sm ml-2"
+                >
+                  <span>🔗 Ativar Google Drive API</span>
+                </a>
+              )}
             </div>
             {userProfile && (
-              <span className="text-[11px] text-[#00c2cb] font-bold">
+              <span className="text-[11px] text-[#00c2cb] font-bold shrink-0">
                 Conta: {userProfile.email || userProfile.name}
               </span>
             )}
