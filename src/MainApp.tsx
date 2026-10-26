@@ -674,8 +674,23 @@ export const MainApp: React.FC = () => {
       return;
     }
 
-    // If stems do not exist yet (legacy imported audio), process them seamlessly
-    if (originalRecord && originalRecord.blob) {
+    // If stems do not exist yet (legacy imported audio or imported from Google Drive), process them seamlessly
+    let targetAudioBlob = originalRecord && originalRecord.blob ? originalRecord.blob : null;
+
+    if (!targetAudioBlob && matchedSong?.driveOriginalId) {
+      try {
+        setProcessingStage('separating');
+        setDidacticMessage('☁️ Baixando música da sua pasta do Google Drive...');
+        setIsWorkerProcessing(true);
+        setWorkerProgress(0.1);
+        targetAudioBlob = await getAudioBlobById(matchedSong.id, matchedSong.driveOriginalId);
+      } catch (dlErr: any) {
+        console.warn('Erro ao baixar áudio do Google Drive:', dlErr);
+        setDidacticMessage(`⚠️ Erro ao baixar áudio do Drive: ${dlErr?.message || 'Arquivo indisponível'}`);
+      }
+    }
+
+    if (targetAudioBlob) {
       setProcessingStage('separating');
       setDidacticMessage('🧠 Gerando as vozes isoladas do Cantor Virtual...');
       setIsWorkerProcessing(true);
@@ -684,13 +699,13 @@ export const MainApp: React.FC = () => {
       try {
         const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
         const ctx = new AudioContextClass();
-        const arrBuf = await originalRecord.blob.arrayBuffer();
+        const arrBuf = await targetAudioBlob.arrayBuffer();
         const targetAudioBuffer = await ctx.decodeAudioData(arrBuf);
         await ctx.close();
 
         let result = await separateStemsWithServer(
-          originalRecord.blob,
-          originalRecord.name || songTitle,
+          targetAudioBlob,
+          originalRecord?.name || matchedSong?.fileName || songTitle,
           (msg) => setDidacticMessage(msg)
         );
 
@@ -725,10 +740,12 @@ export const MainApp: React.FC = () => {
         const accBlobId = await saveAudioOffline(`Instrumental_${songTitle}`, aBlob, 'accompaniment', matchedSong?.category || 'ensaios');
 
         await saveSongPackage({
+          id: matchedSong?.id,
           title: songTitle,
-          fileName: originalRecord.name || songTitle,
+          fileName: originalRecord?.name || matchedSong?.fileName || songTitle,
           category: matchedSong?.category || 'ensaios',
           isSeparated: true,
+          driveOriginalId: matchedSong?.driveOriginalId,
           accompanimentBlobId: accBlobId,
           sopranoBlobId,
           contraltoBlobId,
